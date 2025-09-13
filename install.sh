@@ -109,16 +109,10 @@ install_packages() {
 install_latest_version() {
     echo -e "\033[36m正在从 GitHub 获取最新版本信息...\033[0m"
     
-    # 主仓库
-    BASE_URL="https://api.github.com/repos/charmtv/ml-bbrv3/releases"
+    # 使用有版本的仓库（临时解决方案）
+    echo -e "\033[33m使用备用仓库获取版本信息...\033[0m"
+    BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
     RELEASE_DATA=$(curl -sL "$BASE_URL")
-    
-    # 如果主仓库没有数据，尝试备用仓库
-    if [[ -z "$RELEASE_DATA" || "$RELEASE_DATA" == "[]" ]]; then
-        echo -e "\033[33m主仓库暂无版本，尝试备用仓库...\033[0m"
-        BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
-        RELEASE_DATA=$(curl -sL "$BASE_URL")
-    fi
     
     if [[ -z "$RELEASE_DATA" ]]; then
         echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
@@ -184,16 +178,10 @@ install_latest_version() {
 install_specific_version() {
     echo -e "\033[36m正在从 GitHub 获取版本列表...\033[0m"
     
-    # 主仓库
-    BASE_URL="https://api.github.com/repos/charmtv/ml-bbrv3/releases"
+    # 使用有版本的仓库（临时解决方案）
+    echo -e "\033[33m使用备用仓库获取版本列表...\033[0m"
+    BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
     RELEASE_DATA=$(curl -s "$BASE_URL")
-    
-    # 如果主仓库没有数据，尝试备用仓库
-    if [[ -z "$RELEASE_DATA" || "$RELEASE_DATA" == "[]" ]]; then
-        echo -e "\033[33m主仓库暂无版本，尝试备用仓库...\033[0m"
-        BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
-        RELEASE_DATA=$(curl -s "$BASE_URL")
-    fi
     
     if [[ -z "$RELEASE_DATA" ]]; then
         echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
