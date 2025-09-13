@@ -1,4 +1,4 @@
-# ✨ BBR 管理脚本 ✨
+# ✨ 米粒儿BBR一键脚本 ✨
 
 <div align="center">
 
@@ -10,7 +10,7 @@
 
 无论是想一键安装最新的 **BBR v3** 内核，还是在不同的网络加速方案之间灵活切换，本脚本都能帮你轻松搞定。
 
-> 🌟 **我们致力于提供优雅的界面和流畅的操作，让内核管理不再是件头疼事。**
+> 🌟 **我们致力于提供简约的界面和流畅的操作，让内核管理变得简单高效。**
 
 </div>
 
@@ -115,8 +115,9 @@ bash <(curl -l -s https://raw.githubusercontent.com/charmtv/ml-bbrv3/refs/heads/
 ### 👨‍💻 米粒儿
 
 [![Telegram](https://img.shields.io/badge/Telegram-米粒VPS交流群-blue?style=for-the-badge&logo=telegram)](https://t.me/mlkjfx6)
+[![NodeLoc](https://img.shields.io/badge/NodeLoc-NL论坛-green?style=for-the-badge)](https://www.nodeloc.com/)
 
-**💬 欢迎加入我们的交流群，一起探讨技术问题！**
+**💬 欢迎加入我们的交流群和论坛，一起探讨技术问题！**
 
 </div>
 

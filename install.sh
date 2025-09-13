@@ -210,12 +210,14 @@ print_separator() {
 # --- 主要执行流程 ---
 
 clear
-echo -e "\033[1;36mBBR 管理脚本\033[0m"
+echo -e "\033[1;36m米粒儿BBR一键脚本\033[0m"
 print_separator
 echo -e "\033[37m当前 TCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
 echo -e "\033[37m当前队列管理算法：    \033[0m\033[1;32m$CURRENT_QDISC\033[0m"
 print_separator
-echo -e "\033[90m作者：米粒儿  |  TG交流群：https://t.me/mlkjfx6\033[0m"
+echo -e "\033[1;33m作者：米粒儿\033[0m"
+echo -e "\033[1;33mTG交流群：https://t.me/mlkjfx6\033[0m"
+echo -e "\033[1;33mNL论坛：https://www.nodeloc.com/\033[0m"
 print_separator
 
 echo -e "\033[1;37m请选择操作：\033[0m"
