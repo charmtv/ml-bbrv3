@@ -108,10 +108,28 @@ install_packages() {
 # 函数：检查并安装最新版本
 install_latest_version() {
     echo -e "\033[36m正在从 GitHub 获取最新版本信息...\033[0m"
+    
+    # 主仓库
     BASE_URL="https://api.github.com/repos/charmtv/ml-bbrv3/releases"
     RELEASE_DATA=$(curl -sL "$BASE_URL")
+    
+    # 如果主仓库没有数据，尝试备用仓库
+    if [[ -z "$RELEASE_DATA" || "$RELEASE_DATA" == "[]" ]]; then
+        echo -e "\033[33m主仓库暂无版本，尝试备用仓库...\033[0m"
+        BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
+        RELEASE_DATA=$(curl -sL "$BASE_URL")
+    fi
+    
     if [[ -z "$RELEASE_DATA" ]]; then
-        echo -e "\033[31m从 GitHub 获取版本信息失败。请检查网络连接或 API 状态。\033[0m"
+        echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
+        echo -e "\033[33m可能的原因：\033[0m"
+        echo -e "\033[37m  1. 网络连接问题\033[0m"
+        echo -e "\033[37m  2. GitHub API 访问限制\033[0m"
+        echo -e "\033[37m  3. 仓库不存在或权限问题\033[0m"
+        echo -e "\033[36m建议：\033[0m"
+        echo -e "\033[37m  - 检查网络连接\033[0m"
+        echo -e "\033[37m  - 稍后重试\033[0m"
+        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
         return 1
     fi
 
@@ -123,6 +141,17 @@ install_latest_version() {
 
     if [[ -z "$LATEST_TAG_NAME" || "$LATEST_TAG_NAME" == "null" ]]; then
         echo -e "\033[31m未找到适合当前架构 ($ARCH) 的最新版本。\033[0m"
+        echo -e "\033[33m调试信息：\033[0m"
+        echo -e "\033[37m  当前架构：$ARCH\033[0m"
+        echo -e "\033[37m  搜索过滤：$ARCH_FILTER\033[0m"
+        echo -e "\033[33m可能的原因：\033[0m"
+        echo -e "\033[37m  1. 网络连接问题，无法访问 GitHub API\033[0m"
+        echo -e "\033[37m  2. 仓库中暂无适合您架构的版本\033[0m"
+        echo -e "\033[37m  3. GitHub API 限制或临时故障\033[0m"
+        echo -e "\033[36m建议：\033[0m"
+        echo -e "\033[37m  - 检查网络连接\033[0m"
+        echo -e "\033[37m  - 稍后重试\033[0m"
+        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
         return 1
     fi
     echo -e "\033[36m检测到最新版本：\033[0m\033[1;32m$LATEST_TAG_NAME\033[0m"
@@ -153,10 +182,29 @@ install_latest_version() {
 
 # 函数：安装指定版本
 install_specific_version() {
+    echo -e "\033[36m正在从 GitHub 获取版本列表...\033[0m"
+    
+    # 主仓库
     BASE_URL="https://api.github.com/repos/charmtv/ml-bbrv3/releases"
     RELEASE_DATA=$(curl -s "$BASE_URL")
+    
+    # 如果主仓库没有数据，尝试备用仓库
+    if [[ -z "$RELEASE_DATA" || "$RELEASE_DATA" == "[]" ]]; then
+        echo -e "\033[33m主仓库暂无版本，尝试备用仓库...\033[0m"
+        BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
+        RELEASE_DATA=$(curl -s "$BASE_URL")
+    fi
+    
     if [[ -z "$RELEASE_DATA" ]]; then
-        echo -e "\033[31m从 GitHub 获取版本信息失败。请检查网络连接或 API 状态。\033[0m"
+        echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
+        echo -e "\033[33m可能的原因：\033[0m"
+        echo -e "\033[37m  1. 网络连接问题\033[0m"
+        echo -e "\033[37m  2. GitHub API 访问限制\033[0m"
+        echo -e "\033[37m  3. 仓库不存在或权限问题\033[0m"
+        echo -e "\033[36m建议：\033[0m"
+        echo -e "\033[37m  - 检查网络连接\033[0m"
+        echo -e "\033[37m  - 稍后重试\033[0m"
+        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
         return 1
     fi
 
