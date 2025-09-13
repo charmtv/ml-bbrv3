@@ -17,10 +17,10 @@ done
 
 # 检测系统架构
 ARCH=$(uname -m)
-if [[ "$ARCH" != "aarch64" && "$ARCH" != "x86_64" ]]; then
-    echo -e "\033[31m(￣□￣)哇！这个脚本只支持 ARM 和 x86_64 架构哦~ 您的系统架构是：$ARCH\033[0m"
-    exit 1
-fi
+    if [[ "$ARCH" != "aarch64" && "$ARCH" != "x86_64" ]]; then
+        echo -e "\033[31m此脚本只支持 ARM 和 x86_64 架构，您的系统架构是：$ARCH\033[0m"
+        exit 1
+    fi
 
 # 获取当前 BBR 状态
 CURRENT_ALGO=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
@@ -38,16 +38,16 @@ clean_sysctl_conf() {
 
 # 函数：询问是否永久保存更改
 ask_to_save() {
-    echo -n -e "\033[36m(｡♥‿♥｡) 要将这些配置永久保存到 $SYSCTL_CONF 吗？(y/n): \033[0m"
+    echo -n -e "\033[36m是否要将这些配置永久保存到 $SYSCTL_CONF？(y/n): \033[0m"
     read -r SAVE
     if [[ "$SAVE" == "y" || "$SAVE" == "Y" ]]; then
         clean_sysctl_conf
         echo "net.core.default_qdisc=$QDISC" | sudo tee -a "$SYSCTL_CONF" > /dev/null
         echo "net.ipv4.tcp_congestion_control=$ALGO" | sudo tee -a "$SYSCTL_CONF" > /dev/null
         sudo sysctl --system > /dev/null 2>&1
-        echo -e "\033[1;32m(☆^ー^☆) 更改已永久保存啦~\033[0m"
+        echo -e "\033[1;32m配置已永久保存\033[0m"
     else
-        echo -e "\033[33m(⌒_⌒;) 好吧，没有永久保存呢~\033[0m"
+        echo -e "\033[33m配置未永久保存\033[0m"
     fi
 }
 
@@ -134,8 +134,7 @@ install_latest_version() {
     CORE_LATEST_VERSION="${CORE_LATEST_VERSION#arm64-}"
 
     if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" == "$CORE_LATEST_VERSION"* ]]; then
-        # 修复了此处的颜文字，将反引号 ` 替换为单引号 '
-        echo -e "\033[1;32m(o'▽'o) 您已安装最新版本，无需更新！\033[0m"
+        echo -e "\033[1;32m您已安装最新版本，无需更新\033[0m"
         return 0
     fi
 
@@ -203,91 +202,90 @@ install_specific_version() {
     install_packages
 }
 
-# 美化输出的分隔线
+# 简洁的分隔线
 print_separator() {
-    echo -e "\033[34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo -e "\033[90m─────────────────────────────────────────────\033[0m"
 }
 
 # --- 主要执行流程 ---
 
 clear
+echo -e "\033[1;36mBBR 管理脚本\033[0m"
 print_separator
-echo -e "\033[1;35m(☆ω☆)✧*｡ 欢迎来到 BBR 管理脚本世界哒！ ✧*｡(☆ω☆)\033[0m"
+echo -e "\033[37m当前 TCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
+echo -e "\033[37m当前队列管理算法：    \033[0m\033[1;32m$CURRENT_QDISC\033[0m"
 print_separator
-echo -e "\033[36m当前 TCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
-echo -e "\033[36m当前队列管理算法：    \033[0m\033[1;32m$CURRENT_QDISC\033[0m"
-print_separator
-echo -e "\033[1;33m作者：米粒儿  |  TG交流群：https://t.me/mlkjfx6\033[0m"
+echo -e "\033[90m作者：米粒儿  |  TG交流群：https://t.me/mlkjfx6\033[0m"
 print_separator
 
-echo -e "\033[1;33m╭( ･ㅂ･)و ✧ 你可以选择以下操作哦：\033[0m"
-echo -e "\033[33m 1. 🚀 安装或更新 BBR v3 (最新版)\033[0m"
-echo -e "\033[33m 2. 📚 指定版本安装\033[0m"
-echo -e "\033[33m 3. 🔍 检查 BBR v3 状态\033[0m"
-echo -e "\033[33m 4. ⚡ 启用 BBR + FQ\033[0m"
-echo -e "\033[33m 5. ⚡ 启用 BBR + FQ_PIE\033[0m"
-echo -e "\033[33m 6. ⚡ 启用 BBR + CAKE\033[0m"
-echo -e "\033[33m 7. 🗑️  卸载 BBR 内核\033[0m"
+echo -e "\033[1;37m请选择操作：\033[0m"
+echo -e "\033[37m 1. 安装或更新 BBR v3 (最新版)\033[0m"
+echo -e "\033[37m 2. 指定版本安装\033[0m"
+echo -e "\033[37m 3. 检查 BBR v3 状态\033[0m"
+echo -e "\033[37m 4. 启用 BBR + FQ\033[0m"
+echo -e "\033[37m 5. 启用 BBR + FQ_PIE\033[0m"
+echo -e "\033[37m 6. 启用 BBR + CAKE\033[0m"
+echo -e "\033[37m 7. 卸载 BBR 内核\033[0m"
 print_separator
-echo -n -e "\033[36m请选择一个操作 (1-7) (｡･ω･｡): \033[0m"
+echo -n -e "\033[37m请输入选项 (1-7): \033[0m"
 read -r ACTION
 
 case "$ACTION" in
     1)
-        echo -e "\033[1;32m٩(｡•́‿•̀｡)۶ 您选择了安装或更新 BBR v3！\033[0m"
+        echo -e "\033[1;32m正在安装或更新 BBR v3...\033[0m"
         install_latest_version
         ;;
     2)
-        echo -e "\033[1;32m(｡･∀･)ﾉﾞ 您选择了安装指定版本的 BBR！\033[0m"
+        echo -e "\033[1;32m正在安装指定版本的 BBR...\033[0m"
         install_specific_version
         ;;
     3)
-        echo -e "\033[1;32m(｡･ω･｡) 检查是否为 BBR v3...\033[0m"
+        echo -e "\033[1;32m检查 BBR v3 状态...\033[0m"
         BBR_MODULE_INFO=$(modinfo tcp_bbr 2>/dev/null)
         if [[ -z "$BBR_MODULE_INFO" ]]; then
-            echo -e "\033[31m(⊙﹏⊙) 未加载 tcp_bbr 模块，无法检查版本。请先安装内核并重启。\033[0m"
+            echo -e "\033[31m未加载 tcp_bbr 模块，无法检查版本。请先安装内核并重启。\033[0m"
             exit 1
         fi
         BBR_VERSION=$(echo "$BBR_MODULE_INFO" | awk '/^version:/ {print $2}')
         if [[ "$BBR_VERSION" == "3" ]]; then
-            echo -e "\033[36m✔ BBR 模块版本：\033[0m\033[1;32m$BBR_VERSION (v3)\033[0m"
+            echo -e "\033[36mBBR 模块版本：\033[0m\033[1;32m$BBR_VERSION (v3)\033[0m"
         else
-            echo -e "\033[33m(￣﹃￣) 检测到 BBR 模块，但版本是：$BBR_VERSION，不是 v3！\033[0m"
+            echo -e "\033[33m检测到 BBR 模块，但版本是：$BBR_VERSION，不是 v3\033[0m"
         fi
         
         CURRENT_ALGO=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
         if [[ "$CURRENT_ALGO" == "bbr" ]]; then
-            echo -e "\033[36m✔ TCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
+            echo -e "\033[36mTCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
         else
-            echo -e "\033[31m(⊙﹏⊙) 当前算法不是 bbr，而是：$CURRENT_ALGO\033[0m"
+            echo -e "\033[31m当前算法不是 bbr，而是：$CURRENT_ALGO\033[0m"
         fi
 
         if [[ "$BBR_VERSION" == "3" && "$CURRENT_ALGO" == "bbr" ]]; then
-            echo -e "\033[1;32mヽ(✿ﾟ▽ﾟ)ノ 检测完成，BBR v3 已正确安装并生效！\033[0m"
+            echo -e "\033[1;32m检测完成，BBR v3 已正确安装并生效\033[0m"
         else
-            echo -e "\033[33mBBR v3 未完全生效。请确保已安装内核并重启，然后使用选项 4/5/6 启用。\033[0m"
+            echo -e "\033[33mBBR v3 未完全生效。请确保已安装内核并重启，然后使用选项 4/5/6 启用\033[0m"
         fi
         ;;
     4)
-        echo -e "\033[1;32m(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧ 使用 BBR + FQ 加速！\033[0m"
+        echo -e "\033[1;32m启用 BBR + FQ 加速\033[0m"
         ALGO="bbr"
         QDISC="fq"
         ask_to_save
         ;;
     5)
-        echo -e "\033[1;32m٩(•‿•)۶ 使用 BBR + FQ_PIE 加速！\033[0m"
+        echo -e "\033[1;32m启用 BBR + FQ_PIE 加速\033[0m"
         ALGO="bbr"
         QDISC="fq_pie"
         ask_to_save
         ;;
     6)
-        echo -e "\033[1;32m(ﾉ≧∀≦)ﾉ 使用 BBR + CAKE 加速！\033[0m"
+        echo -e "\033[1;32m启用 BBR + CAKE 加速\033[0m"
         ALGO="bbr"
         QDISC="cake"
         ask_to_save
         ;;
     7)
-        echo -e "\033[1;32mヽ(・∀・)ノ 您选择了卸载 BBR 内核！\033[0m"
+        echo -e "\033[1;32m正在卸载 BBR 内核\033[0m"
         PACKAGES_TO_REMOVE=$(dpkg -l | grep "joeyblog" | awk '{print $2}' | tr '\n' ' ')
         if [[ -n "$PACKAGES_TO_REMOVE" ]]; then
             echo -e "\033[36m将要卸载以下内核包: \033[33m$PACKAGES_TO_REMOVE\033[0m"
@@ -299,6 +297,6 @@ case "$ACTION" in
         fi
         ;;
     *)
-        echo -e "\033[31m(￣▽￣)ゞ 无效的选项，请输入 1-7 之间的数字哦~\033[0m"
+        echo -e "\033[31m无效的选项，请输入 1-7 之间的数字\033[0m"
         ;;
 esac
