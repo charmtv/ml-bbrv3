@@ -60,7 +60,7 @@
 ### 📥 一键安装
 
 ```bash
-bash <(curl -l -s https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/refs/heads/main/install.sh)
+bash <(curl -l -s https://raw.githubusercontent.com/charmtv/ml-bbrv3/refs/heads/main/install.sh)
 ```
 
 > 💡 **提示：** 复制上面的命令到终端执行即可开始使用！
@@ -148,16 +148,16 @@ bash <(curl -l -s https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/refs/h
 
 ## 🎉 快来体验不一样的 BBR 管理工具吧！ 🎉
 
-[![Star](https://img.shields.io/github/stars/byJoey/Actions-bbr-v3?style=social)](https://github.com/byJoey/Actions-bbr-v3)
-[![Fork](https://img.shields.io/github/forks/byJoey/Actions-bbr-v3?style=social)](https://github.com/byJoey/Actions-bbr-v3/fork)
+[![Star](https://img.shields.io/github/stars/charmtv/ml-bbrv3?style=social)](https://github.com/charmtv/ml-bbrv3)
+[![Fork](https://img.shields.io/github/forks/charmtv/ml-bbrv3?style=social)](https://github.com/charmtv/ml-bbrv3/fork)
 
 </div>  
 ## Star History
 
-<a href="https://star-history.com/#byJoey/Actions-bbr-v3&Timeline">
+<a href="https://star-history.com/#charmtv/ml-bbrv3&Timeline">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=byJoey/Actions-bbr-v3&type=Timeline&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=byJoey/Actions-bbr-v3&type=Timeline" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=byJoey/Actions-bbr-v3&type=Timeline" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline" />
  </picture>
 </a>
