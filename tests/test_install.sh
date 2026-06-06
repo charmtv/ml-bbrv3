@@ -39,11 +39,46 @@ assert_contains() {
   pass "$label"
 }
 
+reset_cli_state() {
+  DRY_RUN=0
+  YES=0
+  FORCE_NON_GRUB=0
+  REQUIRE_CHECKSUMS=0
+  COMMAND=""
+  COMMAND_ARG=""
+  UPSTREAM_REPO="$DEFAULT_UPSTREAM_REPO"
+  SYSCTL_CONF="/etc/sysctl.d/99-ml-bbrv3.conf"
+  SUDO=()
+  TMPDIR_CREATED=""
+}
+
 test_help() {
   local output
   output="$(ML_BBRV3_TESTING=0 bash "$ROOT_DIR/install.sh" --help)"
   assert_contains "$output" "Usage:" "help includes usage"
   assert_contains "$output" "--dry-run" "help includes dry-run"
+  assert_contains "$output" "no command" "help documents one-click default"
+}
+
+test_default_command() {
+  reset_cli_state
+  parse_args
+  apply_default_command 2>/dev/null
+  assert_eq "latest" "$COMMAND" "no args defaults to latest"
+  assert_eq "1" "$YES" "no args enables non-interactive install"
+
+  reset_cli_state
+  parse_args --dry-run
+  apply_default_command 2>/dev/null
+  assert_eq "latest" "$COMMAND" "dry-run defaults to latest"
+  assert_eq "1" "$DRY_RUN" "dry-run option is preserved"
+  assert_eq "1" "$YES" "dry-run default is non-interactive"
+
+  reset_cli_state
+  parse_args --menu
+  apply_default_command
+  assert_eq "menu" "$COMMAND" "menu command bypasses default install"
+  assert_eq "0" "$YES" "menu command keeps prompts"
 }
 
 test_arch_mapping() {
@@ -161,6 +196,7 @@ test_asset_allowlist() {
 }
 
 test_help
+test_default_command
 test_arch_mapping
 test_release_selection
 test_asset_allowlist

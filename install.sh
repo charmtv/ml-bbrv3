@@ -25,15 +25,18 @@ usage() {
 ml-bbrv3 installer
 
 Usage:
+  bash install.sh
   bash install.sh [command] [options]
 
 Commands:
+  no command                 One-click install latest BBR v3 kernel without prompts.
   --latest                  Install or update to the newest matching BBR v3 kernel.
   --install-version TAG     Install a specific upstream release tag.
   --list-versions           List upstream releases for the current CPU architecture.
   --status                  Show BBR and qdisc status.
   --enable QDISC            Enable bbr with fq, fq_pie, or cake.
   --uninstall               Remove joeyblog BBR kernel packages.
+  --menu                    Show the interactive menu.
   --help                    Show this help.
 
 Options:
@@ -45,6 +48,8 @@ Options:
   --sysctl-file PATH        Override persistent sysctl config path.
 
 Examples:
+  bash install.sh
+  bash install.sh --dry-run
   bash install.sh --latest --dry-run
   bash install.sh --latest
   bash install.sh --install-version x86_64-7.0.5
@@ -633,6 +638,9 @@ parse_args() {
       --uninstall)
         set_command uninstall
         ;;
+      --menu)
+        set_command menu
+        ;;
       --dry-run)
         DRY_RUN=1
         ;;
@@ -667,6 +675,9 @@ parse_args() {
       uninstall)
         set_command uninstall
         ;;
+      menu)
+        set_command menu
+        ;;
       *)
         die "Unknown argument: $1"
         ;;
@@ -675,13 +686,21 @@ parse_args() {
   done
 }
 
+apply_default_command() {
+  if [[ -n "$COMMAND" ]]; then
+    return 0
+  fi
+
+  COMMAND="latest"
+  YES=1
+  log "No command supplied; running one-click latest install without prompts."
+}
+
 main() {
   parse_args "$@"
+  apply_default_command
 
   case "$COMMAND" in
-    "")
-      interactive_menu
-      ;;
     latest)
       install_latest
       ;;
@@ -699,6 +718,9 @@ main() {
       ;;
     uninstall)
       uninstall_kernel
+      ;;
+    menu)
+      interactive_menu
       ;;
     *)
       die "Internal error: unknown command $COMMAND"
