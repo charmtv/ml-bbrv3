@@ -29,7 +29,7 @@ Usage:
   bash install.sh [command] [options]
 
 Commands:
-  no command                 One-click install latest BBR v3 kernel without prompts.
+  no command                 Show the interactive menu.
   --latest                  Install or update to the newest matching BBR v3 kernel.
   --install-version TAG     Install a specific upstream release tag.
   --list-versions           List upstream releases for the current CPU architecture.
@@ -49,9 +49,8 @@ Options:
 
 Examples:
   bash install.sh
-  bash install.sh --dry-run
+  bash install.sh --latest --yes
   bash install.sh --latest --dry-run
-  bash install.sh --latest
   bash install.sh --install-version x86_64-7.0.5
   bash install.sh --enable fq --yes
 EOF
@@ -691,9 +690,7 @@ apply_default_command() {
     return 0
   fi
 
-  COMMAND="latest"
-  YES=1
-  log "No command supplied; running one-click latest install without prompts."
+  COMMAND="menu"
 }
 
 main() {

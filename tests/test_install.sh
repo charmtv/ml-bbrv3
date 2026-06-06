@@ -57,22 +57,28 @@ test_help() {
   output="$(ML_BBRV3_TESTING=0 bash "$ROOT_DIR/install.sh" --help)"
   assert_contains "$output" "Usage:" "help includes usage"
   assert_contains "$output" "--dry-run" "help includes dry-run"
-  assert_contains "$output" "no command" "help documents one-click default"
+  assert_contains "$output" "Show the interactive menu" "help documents menu default"
 }
 
 test_default_command() {
   reset_cli_state
   parse_args
-  apply_default_command 2>/dev/null
-  assert_eq "latest" "$COMMAND" "no args defaults to latest"
-  assert_eq "1" "$YES" "no args enables non-interactive install"
+  apply_default_command
+  assert_eq "menu" "$COMMAND" "no args defaults to menu"
+  assert_eq "0" "$YES" "no args keeps prompts"
 
   reset_cli_state
   parse_args --dry-run
-  apply_default_command 2>/dev/null
-  assert_eq "latest" "$COMMAND" "dry-run defaults to latest"
+  apply_default_command
+  assert_eq "menu" "$COMMAND" "dry-run defaults to menu"
   assert_eq "1" "$DRY_RUN" "dry-run option is preserved"
-  assert_eq "1" "$YES" "dry-run default is non-interactive"
+  assert_eq "0" "$YES" "dry-run keeps prompts"
+
+  reset_cli_state
+  parse_args --latest --yes
+  apply_default_command
+  assert_eq "latest" "$COMMAND" "latest command stays non-menu"
+  assert_eq "1" "$YES" "latest command can run non-interactively"
 
   reset_cli_state
   parse_args --menu

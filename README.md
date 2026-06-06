@@ -15,18 +15,24 @@
 
 ## 快速开始
 
-一键安装或更新最新版：
+打开交互菜单：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh)
 ```
 
-这条命令会自动选择当前架构可用的最新 BBR v3 内核并直接安装，不再中途询问确认。
+进入菜单后，按 `1` 安装或更新最新版 BBR v3，按 `4` 查看当前状态，按 `0` 退出。
+
+需要无人值守一键安装最新版：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest --yes
+```
 
 预演一键安装，不执行系统写入：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --dry-run
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest --dry-run
 ```
 
 查看帮助：
