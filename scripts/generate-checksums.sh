@@ -31,8 +31,8 @@ main() {
 
   local resolved_dir
   resolved_dir="$(cd "$target_dir" && pwd -P)"
-  [[ -n "$resolved_dir" && "$resolved_dir" != "/" ]] ||
-    die "Refusing to write checksums for an unsafe directory: $resolved_dir"
+  [[ -n "$resolved_dir" && "$resolved_dir" != "/" ]] \
+    || die "Refusing to write checksums for an unsafe directory: $resolved_dir"
 
   shopt -s nullglob
   local packages=("$resolved_dir"/linux-*.deb)

@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT_DIR"
 
 export ML_BBRV3_TESTING=1
-# shellcheck source=../install.sh
+# shellcheck source=install.sh
 source "$ROOT_DIR/install.sh"
 
 pass() {
@@ -24,8 +24,8 @@ assert_eq() {
   local actual="$2"
   local label="$3"
 
-  [[ "$expected" == "$actual" ]] ||
-    fail "$label: expected '$expected', got '$actual'"
+  [[ "$expected" == "$actual" ]] \
+    || fail "$label: expected '$expected', got '$actual'"
   pass "$label"
 }
 
@@ -34,8 +34,8 @@ assert_contains() {
   local needle="$2"
   local label="$3"
 
-  [[ "$haystack" == *"$needle"* ]] ||
-    fail "$label: missing '$needle'"
+  [[ "$haystack" == *"$needle"* ]] \
+    || fail "$label: missing '$needle'"
   pass "$label"
 }
 
@@ -180,8 +180,8 @@ test_asset_allowlist() {
   asset_is_allowed \
     "https://github.com/byJoey/Actions-bbr-v3/releases/download/x86_64-7.0.5/linux-image-7.0.5-joeyblog-bbrv3_7.0.5-1_amd64.deb" \
     "x86_64-7.0.5" \
-    "amd64" ||
-    fail "valid asset should pass allowlist"
+    "amd64" \
+    || fail "valid asset should pass allowlist"
   pass "valid asset passes allowlist"
 
   if asset_is_allowed \

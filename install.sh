@@ -125,8 +125,8 @@ confirm() {
 }
 
 ensure_debian_host() {
-  command -v apt-get >/dev/null 2>&1 ||
-    die "This installer supports Debian/Ubuntu hosts with apt-get only."
+  command -v apt-get >/dev/null 2>&1 \
+    || die "This installer supports Debian/Ubuntu hosts with apt-get only."
 }
 
 ensure_dependencies() {
@@ -167,8 +167,8 @@ normalize_arch() {
 detect_arch() {
   local raw_arch
   raw_arch="$(uname -m)"
-  normalize_arch "$raw_arch" ||
-    die "Unsupported CPU architecture: $raw_arch. Supported: x86_64, arm64."
+  normalize_arch "$raw_arch" \
+    || die "Unsupported CPU architecture: $raw_arch. Supported: x86_64, arm64."
 }
 
 deb_arch_for() {
@@ -317,8 +317,8 @@ download_release_assets() {
 
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
-    asset_is_allowed "$url" "$tag" "$deb_arch" ||
-      die "Release asset failed allowlist validation: $url"
+    asset_is_allowed "$url" "$tag" "$deb_arch" \
+      || die "Release asset failed allowlist validation: $url"
     name="${url##*/}"
     log "Downloading package: $name"
     download_file "$url" "$tmpdir/$name"
@@ -329,8 +329,8 @@ download_release_assets() {
     log "Verifying available SHA256 checksums."
     (
       cd "$tmpdir"
-      find . -maxdepth 1 -type f \( -name 'SHA256SUMS' -o -name '*.sha256' -o -name '*.sha256sum' -o -name '*.sha256.txt' \) -print0 |
-        while IFS= read -r -d '' checksum_file; do
+      find . -maxdepth 1 -type f \( -name 'SHA256SUMS' -o -name '*.sha256' -o -name '*.sha256sum' -o -name '*.sha256.txt' \) -print0 \
+        | while IFS= read -r -d '' checksum_file; do
           sha256sum -c "${checksum_file#./}" --ignore-missing
         done
     )
@@ -364,8 +364,8 @@ update_bootloader() {
 }
 
 installed_joeyblog_packages() {
-  dpkg -l |
-    awk '$1 ~ /^ii/ && $2 ~ /^linux-/ && $0 ~ /joeyblog/ { print $2 }'
+  dpkg -l \
+    | awk '$1 ~ /^ii/ && $2 ~ /^linux-/ && $0 ~ /joeyblog/ { print $2 }'
 }
 
 install_packages_from_dir() {
@@ -402,8 +402,8 @@ install_tag() {
   ensure_dependencies
 
   arch="$(detect_arch)"
-  [[ "$tag" == "$arch"-* ]] ||
-    die "Tag $tag does not match current architecture $arch."
+  [[ "$tag" == "$arch"-* ]] \
+    || die "Tag $tag does not match current architecture $arch."
 
   log "Fetching upstream releases from $UPSTREAM_REPO."
   releases_json="$(fetch_releases)"
