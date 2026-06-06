@@ -467,8 +467,7 @@ enable_bbr() {
   local qdisc="$1"
 
   case "$qdisc" in
-    fq | fq_pie | cake)
-      ;;
+    fq | fq_pie | cake) ;;
     *)
       die "Unsupported qdisc: $qdisc. Use fq, fq_pie, or cake."
       ;;
