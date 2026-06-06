@@ -1,340 +1,711 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# 限制脚本仅支持基于 Debian/Ubuntu 的系统
-if ! command -v apt-get &> /dev/null; then
-    echo -e "\033[31m此脚本仅支持基于 Debian/Ubuntu 的系统，请在支持 apt-get 的系统上运行！\033[0m"
-    exit 1
-fi
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# 检查并安装必要的依赖
-REQUIRED_CMDS=("curl" "wget" "dpkg" "awk" "sed" "sysctl" "jq")
-for cmd in "${REQUIRED_CMDS[@]}"; do
-    if ! command -v $cmd &> /dev/null; then
-        echo -e "\033[33m缺少依赖：$cmd，正在安装...\033[0m"
-        sudo apt-get update && sudo apt-get install -y $cmd > /dev/null 2>&1
-    fi
-done
+readonly SCRIPT_VERSION="2.0.0"
+readonly DEFAULT_UPSTREAM_REPO="byJoey/Actions-bbr-v3"
 
-# 检测系统架构
-ARCH=$(uname -m)
-    if [[ "$ARCH" != "aarch64" && "$ARCH" != "x86_64" ]]; then
-        echo -e "\033[31m此脚本只支持 ARM 和 x86_64 架构，您的系统架构是：$ARCH\033[0m"
-        exit 1
-    fi
+UPSTREAM_REPO="${ML_BBRV3_UPSTREAM_REPO:-$DEFAULT_UPSTREAM_REPO}"
+SYSCTL_CONF="${ML_BBRV3_SYSCTL_CONF:-/etc/sysctl.d/99-ml-bbrv3.conf}"
+CONNECT_TIMEOUT="${ML_BBRV3_CONNECT_TIMEOUT:-10}"
+MAX_TIME="${ML_BBRV3_MAX_TIME:-60}"
 
-# 获取当前 BBR 状态
-CURRENT_ALGO=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
-CURRENT_QDISC=$(sysctl net.core.default_qdisc | awk '{print $3}')
+DRY_RUN=0
+YES=0
+FORCE_NON_GRUB=0
+REQUIRE_CHECKSUMS=0
+COMMAND=""
+COMMAND_ARG=""
+SUDO=()
+TMPDIR_CREATED=""
 
-# sysctl 配置文件路径
-SYSCTL_CONF="/etc/sysctl.d/99-joeyblog.conf"
+usage() {
+  cat <<'EOF'
+ml-bbrv3 installer
 
-# 函数：清理 sysctl.d 中的旧配置
-clean_sysctl_conf() {
-    sudo touch "$SYSCTL_CONF"
-    sudo sed -i '/net.core.default_qdisc/d' "$SYSCTL_CONF"
-    sudo sed -i '/net.ipv4.tcp_congestion_control/d' "$SYSCTL_CONF"
+Usage:
+  bash install.sh [command] [options]
+
+Commands:
+  --latest                  Install or update to the newest matching BBR v3 kernel.
+  --install-version TAG     Install a specific upstream release tag.
+  --list-versions           List upstream releases for the current CPU architecture.
+  --status                  Show BBR and qdisc status.
+  --enable QDISC            Enable bbr with fq, fq_pie, or cake.
+  --uninstall               Remove joeyblog BBR kernel packages.
+  --help                    Show this help.
+
+Options:
+  --dry-run                 Print privileged or destructive commands without running them.
+  --yes                     Do not prompt before install, uninstall, or persistent sysctl write.
+  --force-non-grub          Allow install when update-grub is missing.
+  --require-checksums       Require upstream SHA256 checksum assets.
+  --repo OWNER/REPO         Override upstream release repository.
+  --sysctl-file PATH        Override persistent sysctl config path.
+
+Examples:
+  bash install.sh --latest --dry-run
+  bash install.sh --latest
+  bash install.sh --install-version x86_64-7.0.5
+  bash install.sh --enable fq --yes
+EOF
 }
 
-# 函数：询问是否永久保存更改
-ask_to_save() {
-    echo -n -e "\033[36m是否要将这些配置永久保存到 $SYSCTL_CONF？(y/n): \033[0m"
-    read -r SAVE
-    if [[ "$SAVE" == "y" || "$SAVE" == "Y" ]]; then
-        clean_sysctl_conf
-        echo "net.core.default_qdisc=$QDISC" | sudo tee -a "$SYSCTL_CONF" > /dev/null
-        echo "net.ipv4.tcp_congestion_control=$ALGO" | sudo tee -a "$SYSCTL_CONF" > /dev/null
-        sudo sysctl --system > /dev/null 2>&1
-        echo -e "\033[1;32m配置已永久保存\033[0m"
-    else
-        echo -e "\033[33m配置未永久保存\033[0m"
-    fi
+log() {
+  printf '[ml-bbrv3] %s\n' "$*" >&2
 }
 
-# 函数：获取已安装的 joeyblog 内核版本
-get_installed_version() {
-    dpkg -l | grep "linux-image" | grep "joeyblog" | awk '{print $2}' | sed 's/linux-image-//' | head -n 1
+warn() {
+  printf '[ml-bbrv3] WARNING: %s\n' "$*" >&2
 }
 
-# 函数：智能更新引导加载程序
-update_bootloader() {
-    echo -e "\033[36m正在更新引导加载程序...\033[0m"
-    if command -v update-grub &> /dev/null; then
-        echo -e "\033[33m检测到 GRUB，正在执行 update-grub...\033[0m"
-        if sudo update-grub; then
-            echo -e "\033[1;32mGRUB 更新成功！\033[0m"
-            return 0
-        else
-            echo -e "\033[1;31mGRUB 更新失败！\033[0m"
-            return 1
-        fi
-    else
-        echo -e "\033[33m未找到 'update-grub'。您的系统可能使用 U-Boot 或其他引导程序。\033[0m"
-        echo -e "\033[33m在许多 ARM 系统上，内核安装包会自动处理引导更新，通常无需手动操作。\033[0m"
-        echo -e "\033[33m如果重启后新内核未生效，您可能需要手动更新引导配置，请参考您系统的文档。\033[0m"
-        return 0
-    fi
+die() {
+  printf '[ml-bbrv3] ERROR: %s\n' "$*" >&2
+  exit 1
 }
 
-# 函数：安全地安装下载的包
-install_packages() {
-    if ! ls /tmp/linux-*.deb &> /dev/null; then
-        echo -e "\033[31m错误：未在 /tmp 目录下找到内核文件，安装中止。\033[0m"
-        return 1
-    fi
-    
-    echo -e "\033[36m开始卸载旧版内核... \033[0m"
-    INSTALLED_PACKAGES=$(dpkg -l | grep "joeyblog" | awk '{print $2}' | tr '\n' ' ')
-    if [[ -n "$INSTALLED_PACKAGES" ]]; then
-        sudo apt-get remove --purge $INSTALLED_PACKAGES -y > /dev/null 2>&1
-    fi
-
-    echo -e "\033[36m开始安装新内核... \033[0m"
-    if sudo dpkg -i /tmp/linux-*.deb && update_bootloader; then
-        echo -e "\033[1;32m内核安装并配置完成！\033[0m"
-        echo -n -e "\033[33m需要重启系统来加载新内核。是否立即重启？ (y/n): \033[0m"
-        read -r REBOOT_NOW
-        if [[ "$REBOOT_NOW" == "y" || "$REBOOT_NOW" == "Y" ]]; then
-            echo -e "\033[36m系统即将重启...\033[0m"
-            sudo reboot
-        else
-            echo -e "\033[33m操作完成。请记得稍后手动重启 ('sudo reboot') 来应用新内核。\033[0m"
-        fi
-    else
-        echo -e "\033[1;31m内核安装或引导更新失败！系统可能处于不稳定状态。请不要重启并寻求手动修复！\033[0m"
-    fi
+cleanup() {
+  if [[ -n "$TMPDIR_CREATED" && -d "$TMPDIR_CREATED" ]]; then
+    rm -rf "$TMPDIR_CREATED"
+  fi
 }
 
-# 函数：检查并安装最新版本
-install_latest_version() {
-    echo -e "\033[36m正在从 GitHub 获取最新版本信息...\033[0m"
-    
-    # 使用有版本的仓库（临时解决方案）
-    echo -e "\033[33m使用备用仓库获取版本信息...\033[0m"
-    BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
-    RELEASE_DATA=$(curl -sL "$BASE_URL")
-    
-    if [[ -z "$RELEASE_DATA" ]]; then
-        echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
-        echo -e "\033[33m可能的原因：\033[0m"
-        echo -e "\033[37m  1. 网络连接问题\033[0m"
-        echo -e "\033[37m  2. GitHub API 访问限制\033[0m"
-        echo -e "\033[37m  3. 仓库不存在或权限问题\033[0m"
-        echo -e "\033[36m建议：\033[0m"
-        echo -e "\033[37m  - 检查网络连接\033[0m"
-        echo -e "\033[37m  - 稍后重试\033[0m"
-        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
-        return 1
-    fi
+trap cleanup EXIT
 
-    local ARCH_FILTER=""
-    [[ "$ARCH" == "aarch64" ]] && ARCH_FILTER="arm64"
-    [[ "$ARCH" == "x86_64" ]] && ARCH_FILTER="x86_64"
+run_cmd() {
+  if ((DRY_RUN)); then
+    printf '[dry-run]'
+    printf ' %q' "$@"
+    printf '\n'
+    return 0
+  fi
 
-    LATEST_TAG_NAME=$(echo "$RELEASE_DATA" | jq -r --arg filter "$ARCH_FILTER" 'map(select(.tag_name | test($filter; "i"))) | sort_by(.published_at) | .[-1].tag_name')
-
-    if [[ -z "$LATEST_TAG_NAME" || "$LATEST_TAG_NAME" == "null" ]]; then
-        echo -e "\033[31m未找到适合当前架构 ($ARCH) 的最新版本。\033[0m"
-        echo -e "\033[33m调试信息：\033[0m"
-        echo -e "\033[37m  当前架构：$ARCH\033[0m"
-        echo -e "\033[37m  搜索过滤：$ARCH_FILTER\033[0m"
-        echo -e "\033[33m可能的原因：\033[0m"
-        echo -e "\033[37m  1. 网络连接问题，无法访问 GitHub API\033[0m"
-        echo -e "\033[37m  2. 仓库中暂无适合您架构的版本\033[0m"
-        echo -e "\033[37m  3. GitHub API 限制或临时故障\033[0m"
-        echo -e "\033[36m建议：\033[0m"
-        echo -e "\033[37m  - 检查网络连接\033[0m"
-        echo -e "\033[37m  - 稍后重试\033[0m"
-        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
-        return 1
-    fi
-    echo -e "\033[36m检测到最新版本：\033[0m\033[1;32m$LATEST_TAG_NAME\033[0m"
-
-    INSTALLED_VERSION=$(get_installed_version)
-    echo -e "\033[36m当前已安装版本：\033[0m\033[1;32m${INSTALLED_VERSION:-"未安装"}\033[0m"
-
-    CORE_LATEST_VERSION="${LATEST_TAG_NAME#x86_64-}"
-    CORE_LATEST_VERSION="${CORE_LATEST_VERSION#arm64-}"
-
-    if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" == "$CORE_LATEST_VERSION"* ]]; then
-        echo -e "\033[1;32m您已安装最新版本，无需更新\033[0m"
-        return 0
-    fi
-
-    echo -e "\033[33m发现新版本或未安装内核，准备下载...\033[0m"
-    ASSET_URLS=$(echo "$RELEASE_DATA" | jq -r --arg tag "$LATEST_TAG_NAME" '.[] | select(.tag_name == $tag) | .assets[].browser_download_url')
-    
-    rm -f /tmp/linux-*.deb
-
-    for URL in $ASSET_URLS; do
-        echo -e "\033[36m正在下载文件：$URL\033[0m"
-        wget -q --show-progress "$URL" -P /tmp/ || { echo -e "\033[31m下载失败：$URL\033[0m"; return 1; }
-    done
-    
-    install_packages
+  "$@"
 }
 
-# 函数：安装指定版本
-install_specific_version() {
-    echo -e "\033[36m正在从 GitHub 获取版本列表...\033[0m"
-    
-    # 使用有版本的仓库（临时解决方案）
-    echo -e "\033[33m使用备用仓库获取版本列表...\033[0m"
-    BASE_URL="https://api.github.com/repos/byJoey/Actions-bbr-v3/releases"
-    RELEASE_DATA=$(curl -s "$BASE_URL")
-    
-    if [[ -z "$RELEASE_DATA" ]]; then
-        echo -e "\033[31m从 GitHub 获取版本信息失败。\033[0m"
-        echo -e "\033[33m可能的原因：\033[0m"
-        echo -e "\033[37m  1. 网络连接问题\033[0m"
-        echo -e "\033[37m  2. GitHub API 访问限制\033[0m"
-        echo -e "\033[37m  3. 仓库不存在或权限问题\033[0m"
-        echo -e "\033[36m建议：\033[0m"
-        echo -e "\033[37m  - 检查网络连接\033[0m"
-        echo -e "\033[37m  - 稍后重试\033[0m"
-        echo -e "\033[37m  - 联系作者获取帮助：https://t.me/mlkjfx6\033[0m"
-        return 1
-    fi
-
-    local ARCH_FILTER=""
-    [[ "$ARCH" == "aarch64" ]] && ARCH_FILTER="arm64"
-    [[ "$ARCH" == "x86_64" ]] && ARCH_FILTER="x86_64"
-    
-    MATCH_TAGS=$(echo "$RELEASE_DATA" | jq -r --arg filter "$ARCH_FILTER" '.[] | select(.tag_name | test($filter; "i")) | .tag_name')
-
-    if [[ -z "$MATCH_TAGS" ]]; then
-        echo -e "\033[31m未找到适合当前架构的版本。\033[0m"
-        return 1
-    fi
-
-    echo -e "\033[36m以下为适用于当前架构的版本：\033[0m"
-    IFS=$'\n' read -rd '' -a TAG_ARRAY <<<"$MATCH_TAGS"
-
-    for i in "${!TAG_ARRAY[@]}"; do
-        echo -e "\033[33m $((i+1)). ${TAG_ARRAY[$i]}\033[0m"
-    done
-
-    echo -n -e "\033[36m请输入要安装的版本编号（例如 1）：\033[0m"
-    read -r CHOICE
-    
-    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || (( CHOICE < 1 || CHOICE > ${#TAG_ARRAY[@]} )); then
-        echo -e "\033[31m输入无效编号，取消操作。\033[0m"
-        return 1
-    fi
-    
-    INDEX=$((CHOICE-1))
-    SELECTED_TAG="${TAG_ARRAY[$INDEX]}"
-    echo -e "\033[36m已选择版本：\033[0m\033[1;32m$SELECTED_TAG\033[0m"
-
-    ASSET_URLS=$(echo "$RELEASE_DATA" | jq -r --arg tag "$SELECTED_TAG" '.[] | select(.tag_name == $tag) | .assets[].browser_download_url')
-    
-    rm -f /tmp/linux-*.deb
-    
-    for URL in $ASSET_URLS; do
-        echo -e "\033[36m下载中：$URL\033[0m"
-        wget -q --show-progress "$URL" -P /tmp/ || { echo -e "\033[31m下载失败：$URL\033[0m"; return 1; }
-    done
-
-    install_packages
+run_privileged() {
+  if ((${#SUDO[@]})); then
+    run_cmd "${SUDO[@]}" "$@"
+  else
+    run_cmd "$@"
+  fi
 }
 
-# 简洁的分隔线
-print_separator() {
-    echo -e "\033[90m─────────────────────────────────────────────\033[0m"
+require_cmd() {
+  local cmd="$1"
+  command -v "$cmd" >/dev/null 2>&1 || die "Required command not found: $cmd"
 }
 
-# --- 主要执行流程 ---
+init_privilege() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    SUDO=()
+  else
+    require_cmd sudo
+    SUDO=(sudo)
+  fi
+}
 
-clear
-echo -e "\033[1;36m米粒儿BBR一键脚本\033[0m"
-print_separator
-echo -e "\033[37m当前 TCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
-echo -e "\033[37m当前队列管理算法：    \033[0m\033[1;32m$CURRENT_QDISC\033[0m"
-print_separator
-echo -e "\033[1;33m作者：米粒儿\033[0m"
-echo -e "\033[1;33mTG交流群：https://t.me/mlkjfx6\033[0m"
-echo -e "\033[1;33mNL论坛：https://www.nodeloc.com/\033[0m"
-print_separator
+confirm() {
+  local prompt="$1"
 
-echo -e "\033[1;37m请选择操作：\033[0m"
-echo -e "\033[37m 1. 安装或更新 BBR v3 (最新版)\033[0m"
-echo -e "\033[37m 2. 指定版本安装\033[0m"
-echo -e "\033[37m 3. 检查 BBR v3 状态\033[0m"
-echo -e "\033[37m 4. 启用 BBR + FQ\033[0m"
-echo -e "\033[37m 5. 启用 BBR + FQ_PIE\033[0m"
-echo -e "\033[37m 6. 启用 BBR + CAKE\033[0m"
-echo -e "\033[37m 7. 卸载 BBR 内核\033[0m"
-print_separator
-echo -n -e "\033[37m请输入选项 (1-7): \033[0m"
-read -r ACTION
+  if ((YES || DRY_RUN)); then
+    log "$prompt"
+    return 0
+  fi
 
-case "$ACTION" in
-    1)
-        echo -e "\033[1;32m正在安装或更新 BBR v3...\033[0m"
-        install_latest_version
-        ;;
-    2)
-        echo -e "\033[1;32m正在安装指定版本的 BBR...\033[0m"
-        install_specific_version
-        ;;
-    3)
-        echo -e "\033[1;32m检查 BBR v3 状态...\033[0m"
-        BBR_MODULE_INFO=$(modinfo tcp_bbr 2>/dev/null)
-        if [[ -z "$BBR_MODULE_INFO" ]]; then
-            echo -e "\033[31m未加载 tcp_bbr 模块，无法检查版本。请先安装内核并重启。\033[0m"
-            exit 1
-        fi
-        BBR_VERSION=$(echo "$BBR_MODULE_INFO" | awk '/^version:/ {print $2}')
-        if [[ "$BBR_VERSION" == "3" ]]; then
-            echo -e "\033[36mBBR 模块版本：\033[0m\033[1;32m$BBR_VERSION (v3)\033[0m"
-        else
-            echo -e "\033[33m检测到 BBR 模块，但版本是：$BBR_VERSION，不是 v3\033[0m"
-        fi
-        
-        CURRENT_ALGO=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
-        if [[ "$CURRENT_ALGO" == "bbr" ]]; then
-            echo -e "\033[36mTCP 拥塞控制算法：\033[0m\033[1;32m$CURRENT_ALGO\033[0m"
-        else
-            echo -e "\033[31m当前算法不是 bbr，而是：$CURRENT_ALGO\033[0m"
-        fi
+  local answer
+  printf '%s [y/N]: ' "$prompt"
+  read -r answer
+  [[ "$answer" == "y" || "$answer" == "Y" ]]
+}
 
-        if [[ "$BBR_VERSION" == "3" && "$CURRENT_ALGO" == "bbr" ]]; then
-            echo -e "\033[1;32m检测完成，BBR v3 已正确安装并生效\033[0m"
-        else
-            echo -e "\033[33mBBR v3 未完全生效。请确保已安装内核并重启，然后使用选项 4/5/6 启用\033[0m"
-        fi
-        ;;
-    4)
-        echo -e "\033[1;32m启用 BBR + FQ 加速\033[0m"
-        ALGO="bbr"
-        QDISC="fq"
-        ask_to_save
-        ;;
-    5)
-        echo -e "\033[1;32m启用 BBR + FQ_PIE 加速\033[0m"
-        ALGO="bbr"
-        QDISC="fq_pie"
-        ask_to_save
-        ;;
-    6)
-        echo -e "\033[1;32m启用 BBR + CAKE 加速\033[0m"
-        ALGO="bbr"
-        QDISC="cake"
-        ask_to_save
-        ;;
-    7)
-        echo -e "\033[1;32m正在卸载 BBR 内核\033[0m"
-        PACKAGES_TO_REMOVE=$(dpkg -l | grep "joeyblog" | awk '{print $2}' | tr '\n' ' ')
-        if [[ -n "$PACKAGES_TO_REMOVE" ]]; then
-            echo -e "\033[36m将要卸载以下内核包: \033[33m$PACKAGES_TO_REMOVE\033[0m"
-            sudo apt-get remove --purge $PACKAGES_TO_REMOVE -y
-            update_bootloader
-            echo -e "\033[1;32m内核包已卸载。请记得重启系统。\033[0m"
-        else
-            echo -e "\033[33m未找到由本脚本安装的 'joeyblog' 内核包。\033[0m"
-        fi
-        ;;
+ensure_debian_host() {
+  command -v apt-get >/dev/null 2>&1 ||
+    die "This installer supports Debian/Ubuntu hosts with apt-get only."
+}
+
+ensure_dependencies() {
+  local missing=()
+  local cmd
+
+  for cmd in curl jq dpkg awk sed sysctl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing+=("$cmd")
+    fi
+  done
+
+  if ((${#missing[@]} == 0)); then
+    return 0
+  fi
+
+  log "Installing missing dependencies: ${missing[*]}"
+  run_privileged apt-get update
+  run_privileged apt-get install -y "${missing[@]}"
+}
+
+normalize_arch() {
+  local raw_arch="$1"
+
+  case "$raw_arch" in
+    x86_64 | amd64)
+      printf 'x86_64\n'
+      ;;
+    aarch64 | arm64)
+      printf 'arm64\n'
+      ;;
     *)
-        echo -e "\033[31m无效的选项，请输入 1-7 之间的数字\033[0m"
+      return 1
+      ;;
+  esac
+}
+
+detect_arch() {
+  local raw_arch
+  raw_arch="$(uname -m)"
+  normalize_arch "$raw_arch" ||
+    die "Unsupported CPU architecture: $raw_arch. Supported: x86_64, arm64."
+}
+
+deb_arch_for() {
+  local arch="$1"
+
+  case "$arch" in
+    x86_64)
+      printf 'amd64\n'
+      ;;
+    arm64)
+      printf 'arm64\n'
+      ;;
+    *)
+      die "Unsupported normalized architecture: $arch"
+      ;;
+  esac
+}
+
+github_releases_api() {
+  printf 'https://api.github.com/repos/%s/releases\n' "$UPSTREAM_REPO"
+}
+
+fetch_releases() {
+  local api_url
+  api_url="$(github_releases_api)"
+
+  curl -fsSL \
+    --connect-timeout "$CONNECT_TIMEOUT" \
+    --max-time "$MAX_TIME" \
+    --retry 2 \
+    --retry-delay 1 \
+    "$api_url"
+}
+
+select_latest_tag() {
+  local arch="$1"
+
+  jq -r --arg arch "$arch" '
+    [.[] | select(.tag_name | test("^" + $arch + "-"; "i"))]
+    | sort_by(.published_at)
+    | last
+    | .tag_name // empty
+  '
+}
+
+list_version_tags() {
+  local arch="$1"
+
+  jq -r --arg arch "$arch" '
+    [.[] | select(.tag_name | test("^" + $arch + "-"; "i"))]
+    | sort_by(.published_at)
+    | reverse
+    | .[].tag_name
+  '
+}
+
+collect_deb_asset_urls() {
+  local tag="$1"
+  local deb_arch="$2"
+
+  jq -r --arg tag "$tag" --arg deb_arch "$deb_arch" '
+    .[]
+    | select(.tag_name == $tag)
+    | .assets[]
+    | select(.name | test("^linux-"))
+    | select(.name | test("_" + $deb_arch + "\\.deb$"))
+    | select(.name | test("-dbg_") | not)
+    | .browser_download_url
+  '
+}
+
+collect_checksum_urls() {
+  local tag="$1"
+
+  jq -r --arg tag "$tag" '
+    .[]
+    | select(.tag_name == $tag)
+    | .assets[]
+    | select(.name | test("(^SHA256SUMS$|\\.sha256$|\\.sha256sum$|\\.sha256.txt$)"; "i"))
+    | .browser_download_url
+  '
+}
+
+asset_is_allowed() {
+  local url="$1"
+  local tag="$2"
+  local deb_arch="$3"
+  local prefix="https://github.com/${UPSTREAM_REPO}/releases/download/${tag}/"
+  local name="${url##*/}"
+
+  [[ "$url" == "$prefix"* ]] || return 1
+  [[ "$name" == linux-* ]] || return 1
+  [[ "$name" == *.deb ]] || return 1
+  [[ "$name" == *"_${deb_arch}.deb" ]] || return 1
+  [[ "$name" != *"-dbg_"* ]] || return 1
+}
+
+make_temp_dir() {
+  TMPDIR_CREATED="$(mktemp -d "${TMPDIR:-/tmp}/ml-bbrv3.XXXXXX")"
+  printf '%s\n' "$TMPDIR_CREATED"
+}
+
+download_file() {
+  local url="$1"
+  local output="$2"
+
+  curl -fL \
+    --connect-timeout "$CONNECT_TIMEOUT" \
+    --max-time "$MAX_TIME" \
+    --retry 2 \
+    --retry-delay 1 \
+    --output "$output" \
+    "$url"
+
+  [[ -s "$output" ]] || die "Downloaded file is empty: $output"
+}
+
+download_release_assets() {
+  local tag="$1"
+  local arch="$2"
+  local releases_json="$3"
+  local deb_arch tmpdir checksum_urls asset_urls url name
+  local checksum_found=0
+
+  deb_arch="$(deb_arch_for "$arch")"
+  tmpdir="$(make_temp_dir)"
+  log "Using temporary download directory: $tmpdir"
+
+  checksum_urls="$(printf '%s\n' "$releases_json" | collect_checksum_urls "$tag")"
+  if [[ -n "$checksum_urls" ]]; then
+    checksum_found=1
+    while IFS= read -r url; do
+      [[ -n "$url" ]] || continue
+      name="${url##*/}"
+      log "Downloading checksum file: $name"
+      download_file "$url" "$tmpdir/$name"
+    done <<<"$checksum_urls"
+  elif ((REQUIRE_CHECKSUMS)); then
+    die "No upstream checksum asset found for $tag."
+  else
+    warn "No upstream checksum asset found for $tag; enforcing URL and architecture allowlist only."
+  fi
+
+  asset_urls="$(printf '%s\n' "$releases_json" | collect_deb_asset_urls "$tag" "$deb_arch")"
+  [[ -n "$asset_urls" ]] || die "No matching .deb assets found for $tag and $deb_arch."
+
+  while IFS= read -r url; do
+    [[ -n "$url" ]] || continue
+    asset_is_allowed "$url" "$tag" "$deb_arch" ||
+      die "Release asset failed allowlist validation: $url"
+    name="${url##*/}"
+    log "Downloading package: $name"
+    download_file "$url" "$tmpdir/$name"
+  done <<<"$asset_urls"
+
+  if ((checksum_found)); then
+    require_cmd sha256sum
+    log "Verifying available SHA256 checksums."
+    (
+      cd "$tmpdir"
+      find . -maxdepth 1 -type f \( -name 'SHA256SUMS' -o -name '*.sha256' -o -name '*.sha256sum' -o -name '*.sha256.txt' \) -print0 |
+        while IFS= read -r -d '' checksum_file; do
+          sha256sum -c "${checksum_file#./}" --ignore-missing
+        done
+    )
+  fi
+
+  printf '%s\n' "$tmpdir"
+}
+
+ensure_bootloader_supported() {
+  if command -v update-grub >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ((FORCE_NON_GRUB)); then
+    warn "update-grub is missing; proceeding because --force-non-grub was provided."
+    return 0
+  fi
+
+  die "update-grub was not found. This script targets GRUB systems. Re-run with --force-non-grub only if you know your bootloader handles Debian kernel packages."
+}
+
+update_bootloader() {
+  if command -v update-grub >/dev/null 2>&1; then
+    log "Updating GRUB."
+    run_privileged update-grub
+    return 0
+  fi
+
+  warn "Skipping bootloader update because update-grub is unavailable."
+  return 0
+}
+
+installed_joeyblog_packages() {
+  dpkg -l |
+    awk '$1 ~ /^ii/ && $2 ~ /^linux-/ && $0 ~ /joeyblog/ { print $2 }'
+}
+
+install_packages_from_dir() {
+  local package_dir="$1"
+  local packages=()
+  local package
+
+  shopt -s nullglob
+  packages=("$package_dir"/linux-*.deb)
+  shopt -u nullglob
+
+  ((${#packages[@]} > 0)) || die "No linux-*.deb packages found in $package_dir."
+
+  log "Packages selected for installation:"
+  for package in "${packages[@]}"; do
+    printf '  - %s\n' "${package##*/}"
+  done
+
+  confirm "Install these packages now?" || die "Installation cancelled."
+
+  ensure_bootloader_supported
+  run_privileged dpkg -i "${packages[@]}"
+  update_bootloader
+
+  log "Kernel packages installed. Reboot into the new kernel when ready."
+}
+
+install_tag() {
+  local tag="$1"
+  local arch releases_json package_dir
+
+  ensure_debian_host
+  init_privilege
+  ensure_dependencies
+
+  arch="$(detect_arch)"
+  [[ "$tag" == "$arch"-* ]] ||
+    die "Tag $tag does not match current architecture $arch."
+
+  log "Fetching upstream releases from $UPSTREAM_REPO."
+  releases_json="$(fetch_releases)"
+  package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
+  install_packages_from_dir "$package_dir"
+}
+
+install_latest() {
+  local arch releases_json tag package_dir
+
+  ensure_debian_host
+  init_privilege
+  ensure_dependencies
+
+  arch="$(detect_arch)"
+  log "Fetching upstream releases from $UPSTREAM_REPO."
+  releases_json="$(fetch_releases)"
+  tag="$(printf '%s\n' "$releases_json" | select_latest_tag "$arch")"
+  [[ -n "$tag" ]] || die "No release tag found for architecture $arch."
+
+  log "Latest matching release: $tag"
+  package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
+  install_packages_from_dir "$package_dir"
+}
+
+show_versions() {
+  local arch releases_json
+
+  ensure_debian_host
+  init_privilege
+  ensure_dependencies
+  arch="$(detect_arch)"
+  releases_json="$(fetch_releases)"
+  printf '%s\n' "$releases_json" | list_version_tags "$arch"
+}
+
+write_sysctl_conf() {
+  local algo="$1"
+  local qdisc="$2"
+  local tmpfile
+
+  tmpfile="$(mktemp "${TMPDIR:-/tmp}/ml-bbrv3-sysctl.XXXXXX")"
+  if [[ -r "$SYSCTL_CONF" ]]; then
+    sed \
+      -e '/^net\.core\.default_qdisc=/d' \
+      -e '/^net\.ipv4\.tcp_congestion_control=/d' \
+      "$SYSCTL_CONF" >"$tmpfile"
+  fi
+
+  {
+    printf 'net.core.default_qdisc=%s\n' "$qdisc"
+    printf 'net.ipv4.tcp_congestion_control=%s\n' "$algo"
+  } >>"$tmpfile"
+
+  run_privileged mkdir -p "$(dirname "$SYSCTL_CONF")"
+  run_privileged install -m 0644 "$tmpfile" "$SYSCTL_CONF"
+  rm -f "$tmpfile"
+}
+
+enable_bbr() {
+  local qdisc="$1"
+
+  case "$qdisc" in
+    fq | fq_pie | cake)
+      ;;
+    *)
+      die "Unsupported qdisc: $qdisc. Use fq, fq_pie, or cake."
+      ;;
+  esac
+
+  init_privilege
+  require_cmd sysctl
+
+  log "Applying runtime sysctl settings: bbr + $qdisc"
+  run_privileged sysctl -w "net.core.default_qdisc=$qdisc"
+  run_privileged sysctl -w "net.ipv4.tcp_congestion_control=bbr"
+
+  if confirm "Persist settings to $SYSCTL_CONF?"; then
+    write_sysctl_conf "bbr" "$qdisc"
+    log "Persistent sysctl settings written to $SYSCTL_CONF."
+  else
+    warn "Runtime settings were not persisted."
+  fi
+}
+
+show_status() {
+  require_cmd sysctl
+
+  printf 'Kernel: %s\n' "$(uname -r)"
+  printf 'Architecture: %s\n' "$(uname -m)"
+  printf 'Available TCP congestion controls: %s\n' "$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || printf 'unknown')"
+  printf 'Current TCP congestion control: %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || printf 'unknown')"
+  printf 'Current default qdisc: %s\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || printf 'unknown')"
+
+  if command -v modinfo >/dev/null 2>&1 && modinfo tcp_bbr >/dev/null 2>&1; then
+    printf 'tcp_bbr module version: %s\n' "$(modinfo tcp_bbr | awk '/^version:/ { print $2; exit }')"
+  else
+    printf 'tcp_bbr module info: unavailable or built into the kernel\n'
+  fi
+}
+
+uninstall_kernel() {
+  local packages=()
+  local package
+
+  ensure_debian_host
+  init_privilege
+
+  while IFS= read -r package; do
+    [[ -n "$package" ]] && packages+=("$package")
+  done < <(installed_joeyblog_packages)
+
+  if ((${#packages[@]} == 0)); then
+    log "No installed joeyblog kernel packages were found."
+    return 0
+  fi
+
+  log "Packages selected for removal:"
+  for package in "${packages[@]}"; do
+    printf '  - %s\n' "$package"
+  done
+
+  confirm "Remove these packages now?" || die "Uninstall cancelled."
+
+  run_privileged apt-get remove --purge -y "${packages[@]}"
+  update_bootloader
+  log "Kernel packages removed. Reboot when ready."
+}
+
+show_menu() {
+  cat <<'EOF'
+ml-bbrv3 menu
+
+  1. Install or update BBR v3 (latest)
+  2. Install a specific release tag
+  3. List release tags for this architecture
+  4. Show BBR status
+  5. Enable BBR + FQ
+  6. Enable BBR + FQ_PIE
+  7. Enable BBR + CAKE
+  8. Uninstall joeyblog BBR kernel packages
+  0. Exit
+EOF
+}
+
+interactive_menu() {
+  local choice tag
+
+  show_menu
+  printf 'Enter choice: '
+  read -r choice
+
+  case "$choice" in
+    1)
+      install_latest
+      ;;
+    2)
+      printf 'Enter release tag: '
+      read -r tag
+      install_tag "$tag"
+      ;;
+    3)
+      show_versions
+      ;;
+    4)
+      show_status
+      ;;
+    5)
+      enable_bbr fq
+      ;;
+    6)
+      enable_bbr fq_pie
+      ;;
+    7)
+      enable_bbr cake
+      ;;
+    8)
+      uninstall_kernel
+      ;;
+    0)
+      exit 0
+      ;;
+    *)
+      die "Invalid menu choice: $choice"
+      ;;
+  esac
+}
+
+set_command() {
+  local command="$1"
+  local arg="${2:-}"
+
+  if [[ -n "$COMMAND" ]]; then
+    die "Only one command can be supplied. Already have $COMMAND, got $command."
+  fi
+
+  COMMAND="$command"
+  COMMAND_ARG="$arg"
+}
+
+parse_args() {
+  while (($#)); do
+    case "$1" in
+      --help | -h)
+        usage
+        exit 0
         ;;
-esac
+      --version)
+        printf '%s\n' "$SCRIPT_VERSION"
+        exit 0
+        ;;
+      --latest | --install-latest)
+        set_command latest
+        ;;
+      --install-version)
+        [[ $# -ge 2 && -n "$2" ]] || die "--install-version requires a tag."
+        set_command install-version "$2"
+        shift
+        ;;
+      --list-versions)
+        set_command list-versions
+        ;;
+      --status)
+        set_command status
+        ;;
+      --enable)
+        [[ $# -ge 2 && -n "$2" ]] || die "--enable requires fq, fq_pie, or cake."
+        set_command enable "$2"
+        shift
+        ;;
+      --uninstall)
+        set_command uninstall
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        ;;
+      --yes | -y)
+        YES=1
+        ;;
+      --force-non-grub)
+        FORCE_NON_GRUB=1
+        ;;
+      --require-checksums)
+        REQUIRE_CHECKSUMS=1
+        ;;
+      --repo)
+        [[ $# -ge 2 && -n "$2" ]] || die "--repo requires OWNER/REPO."
+        UPSTREAM_REPO="$2"
+        shift
+        ;;
+      --sysctl-file)
+        [[ $# -ge 2 && -n "$2" ]] || die "--sysctl-file requires a path."
+        SYSCTL_CONF="$2"
+        shift
+        ;;
+      latest)
+        set_command latest
+        ;;
+      list-versions)
+        set_command list-versions
+        ;;
+      status)
+        set_command status
+        ;;
+      uninstall)
+        set_command uninstall
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+    shift
+  done
+}
+
+main() {
+  parse_args "$@"
+
+  case "$COMMAND" in
+    "")
+      interactive_menu
+      ;;
+    latest)
+      install_latest
+      ;;
+    install-version)
+      install_tag "$COMMAND_ARG"
+      ;;
+    list-versions)
+      show_versions
+      ;;
+    status)
+      show_status
+      ;;
+    enable)
+      enable_bbr "$COMMAND_ARG"
+      ;;
+    uninstall)
+      uninstall_kernel
+      ;;
+    *)
+      die "Internal error: unknown command $COMMAND"
+      ;;
+  esac
+}
+
+if [[ "${ML_BBRV3_TESTING:-0}" != "1" ]]; then
+  main "$@"
+fi

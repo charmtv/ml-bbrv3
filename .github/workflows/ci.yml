@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: shell checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt jq
+
+      - name: Bash syntax
+        run: |
+          bash -n install.sh
+          bash -n scripts/generate-checksums.sh
+          bash -n tests/test_install.sh
+
+      - name: ShellCheck
+        run: |
+          shellcheck install.sh scripts/generate-checksums.sh tests/test_install.sh
+
+      - name: shfmt
+        run: |
+          shfmt -d -i 2 -ci -bn install.sh scripts/generate-checksums.sh tests/test_install.sh
+
+      - name: Tests
+        run: |
+          bash tests/test_install.sh

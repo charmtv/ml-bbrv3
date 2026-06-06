@@ -1,0 +1,8 @@
+.DS_Store
+*.log
+*.tmp
+*.deb
+SHA256SUMS
+coverage/
+dist/
+tmp/

@@ -1,164 +1,105 @@
-# ✨ 米粒儿BBR一键脚本 ✨
+# ml-bbrv3
 
-<div align="center">
+`ml-bbrv3` 是面向 Debian/Ubuntu 服务器的 BBR v3 内核安装与管理脚本。仓库本身不构建内核制品，安装脚本会从上游仓库 `byJoey/Actions-bbr-v3` 的 GitHub Releases 获取 `.deb` 包。
 
-![BBR Logo](https://img.shields.io/badge/BBR-v3-blue?style=for-the-badge&logo=linux)
-![Platform](https://img.shields.io/badge/Platform-Debian%20%7C%20Ubuntu-orange?style=for-the-badge)
-![Architecture](https://img.shields.io/badge/Arch-x86_64%20%7C%20ARM64-green?style=for-the-badge)
+## 支持范围
 
-**一个为 Debian/Ubuntu 用户设计的，简单、高效且功能丰富的 BBR 管理脚本**
+| 项目 | 说明 |
+| --- | --- |
+| 系统 | Debian 10+ / Ubuntu 18.04+ |
+| 架构 | `x86_64` / `aarch64` |
+| 引导 | 默认要求 GRUB 与 `update-grub` |
+| 目标设备 | VPS、云服务器、独立服务器 |
 
-无论是想一键安装最新的 **BBR v3** 内核，还是在不同的网络加速方案之间灵活切换，本脚本都能帮你轻松搞定。
+不建议直接用于树莓派、NanoPi 等非标准 GRUB 引导的 SBC。确需在非 GRUB 环境使用时，必须自行确认内核包安装后引导链会更新，并显式传入 `--force-non-grub`。
 
-> 🌟 **我们致力于提供简约的界面和流畅的操作，让内核管理变得简单高效。**
+## 快速开始
 
-</div>
-
----
-
-## 🎯 目标用户与支持环境
-
-<div align="center">
-
-| 📋 项目 | ✅ 要求 |
-|:---:|:---:|
-| 🏗️ **支持架构** | `x86_64` / `aarch64` |
-| 🐧 **支持系统** | Debian 10+ / Ubuntu 18.04+ |
-| 💻 **目标设备** | **云服务器 (VPS/Cloud Server)** 或 **独立服务器** |
-| 🔧 **引导方式** | 使用标准 `GRUB` 引导加载程序 |
-
-</div>
-
-> ⚠️ **重要说明**  
-> 本脚本**不适用**于大多数单板计算机（SBC），例如**树莓派 (Raspberry Pi)、NanoPi** 等。这些设备通常使用 U-Boot 等非 GRUB 引导方式，脚本会执行失败。
-
----
-
----
-
-## 🌟 功能列表
-
-<div align="center">
-
-| 🚀 核心功能 | 📝 详细描述 |
-|:---:|:---|
-| 👑 **一键安装** | 自动安装最新的 BBR v3 内核 |
-| ⚡ **智能切换** | 支持 BBR+FQ、BBR+CAKE 等多种加速模式 |
-| 🔧 **灵活控制** | 轻松开启/关闭 BBR 加速功能 |
-| 🗑️ **安全卸载** | 一键卸载不需要的内核版本 |
-| 👀 **实时监控** | 查看当前 TCP 拥塞算法和队列算法 |
-| 🎨 **美观界面** | 美化的输出界面，让操作更有趣 |
-
-</div>  
-
----
-
-## 🚀 快速开始
-
-<div align="center">
-
-### 📥 一键安装
+查看帮助：
 
 ```bash
-bash <(curl -l -s https://raw.githubusercontent.com/charmtv/ml-bbrv3/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --help
 ```
 
-> 💡 **提示：** 复制上面的命令到终端执行即可开始使用！
-
-</div>
-
----
-
-## 🌟 操作界面
-
-<div align="center">
-
-### 🎮 交互式菜单
-
-每次运行脚本，你都会进入一个活泼又实用的选项界面：
+预演最新版本安装，不执行系统写入：
 
 ```bash
-╭( ･ㅂ･)و ✧ 你可以选择以下操作哦：
-  1. 🚀 安装或更新 BBR v3 (最新版)
-  2. 📚 指定版本安装
-  3. 🔍 检查 BBR v3 状态
-  4. ⚡ 启用 BBR + FQ
-  5. ⚡ 启用 BBR + FQ_PIE
-  6. ⚡ 启用 BBR + CAKE
-  7. 🗑️ 卸载 BBR 内核
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest --dry-run
 ```
 
-> 💡 **小提示：** 如果选错了也没关系，脚本会乖乖告诉你该怎么办！
+安装或更新最新版本：
 
-</div>  
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest
+```
 
----
+启用 BBR + FQ 并持久化：
 
-## ❓ 常见问题
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --enable fq --yes
+```
 
-<div align="center">
+## 常用命令
 
-| ❓ 问题 | 💡 解答 |
-|:---:|:---|
-| **为什么下载失败啦？** | 有可能是 GitHub 链接过期了，来群里吐槽一下吧！ |
-| **我不是 BBR 专家，不知道选哪个加速方案？** | 放心，BBR + FQ 是最常见的方案，适用于大多数场景～ |
-| **如果不小心把系统搞崩了怎么办？** | 别慌！记得备份你的内核，或者到 [米粒VPS交流群](https://t.me/mlkjfx6) 寻求帮助 |
+```bash
+# 列出当前架构可用版本
+bash install.sh --list-versions
 
-</div>
+# 安装指定版本
+bash install.sh --install-version x86_64-7.0.5
 
----
+# 查看状态
+bash install.sh --status
 
-## 🌈 作者信息
+# 启用不同队列算法
+bash install.sh --enable fq
+bash install.sh --enable fq_pie
+bash install.sh --enable cake
 
-<div align="center">
+# 卸载 joeyblog BBR 内核包
+bash install.sh --uninstall
+```
 
-### 👨‍💻 米粒儿
+## 安全改进
 
-[![Telegram](https://img.shields.io/badge/Telegram-米粒VPS交流群-blue?style=for-the-badge&logo=telegram)](https://t.me/mlkjfx6)
-[![NodeLoc](https://img.shields.io/badge/NodeLoc-NL论坛-green?style=for-the-badge)](https://www.nodeloc.com/)
+新版脚本相比旧版本做了以下收口：
 
-**💬 欢迎加入我们的交流群和论坛，一起探讨技术问题！**
+- 使用 `mktemp -d` 专属下载目录，不再删除或安装 `/tmp/linux-*.deb` 通配文件。
+- 下载使用 `curl -fL`、连接超时、总超时和有限重试，同时校验文件非空。
+- 上游 release asset 必须匹配 GitHub URL、release tag、架构和 `.deb` 包名白名单。
+- 默认排除 `-dbg` 调试包，避免无意安装巨大 debug image。
+- 默认不先卸载旧内核，安装成功后再由用户自行决定清理旧版本。
+- 默认要求 `update-grub`；非 GRUB 环境必须显式 `--force-non-grub`。
+- 支持 `--dry-run` 和 `--yes`，便于自动化和发布前预演。
+- 支持 `--require-checksums`。如果上游 release 提供 SHA256 文件，脚本会自动校验；未提供时会提示只能执行 URL/架构白名单校验。
 
-</div>
+## 目录结构
 
----
+```text
+install.sh                         主安装器入口
+configs/arm64/linux-bbrv3.config   ARM64 kernel config
+configs/x86_64/linux-bbrv3.config  x86_64 kernel config
+docs/recovery.md                   故障恢复与回滚建议
+docs/release-safety.md             发布与供应链安全说明
+scripts/generate-checksums.sh      生成本地 SHA256SUMS 的辅助脚本
+tests/test_install.sh              Bash 级脚本测试
+.github/workflows/ci.yml           CI: bash -n, shellcheck, shfmt, tests
+```
 
-## ❤️ 开源协议
+## 配置说明
 
-<div align="center">
+两份 kernel config 都保留 BBR、FQ、FQ_PIE、CAKE 和常见云服务器虚拟化驱动。ARM64 配置已调整为默认 BBR，并关闭发布分发中不必要的 debug info，以减小制品体积。
 
-欢迎使用、修改和传播这个脚本！如果你觉得它对你有帮助，记得来点个 Star ⭐ 哦～
+## 恢复与风险
 
-> 💡 **免责声明：** 本脚本由作者热爱 Linux 的灵魂驱动编写，虽尽力确保安全，但任何使用问题请自负风险！
+安装内核属于高风险系统操作。执行前建议保留旧内核、确认控制台/VNC/救援系统可用，并阅读 [恢复手册](docs/recovery.md)。
 
-</div>
+如果下载校验、GRUB 更新、`dpkg -i` 或重启后启动失败，请先不要继续重复执行安装，按恢复手册保留现场并回滚。
 
----
+## 致谢
 
-## 🌟 特别鸣谢
+感谢 `Naochen2799/Latest-Kernel-BBR3` 和 `byJoey/Actions-bbr-v3` 项目提供的技术参考与 release 制品来源。
 
-<div align="center">
+## License
 
-感谢 [Naochen2799/Latest-Kernel-BBR3](https://github.com/Naochen2799/Latest-Kernel-BBR3) 项目提供的技术支持与灵感参考。
-
-</div>
-
----
-
-<div align="center">
-
-## 🎉 快来体验不一样的 BBR 管理工具吧！ 🎉
-
-[![Star](https://img.shields.io/github/stars/charmtv/ml-bbrv3?style=social)](https://github.com/charmtv/ml-bbrv3)
-[![Fork](https://img.shields.io/github/forks/charmtv/ml-bbrv3?style=social)](https://github.com/charmtv/ml-bbrv3/fork)
-
-</div>  
-## Star History
-
-<a href="https://star-history.com/#charmtv/ml-bbrv3&Timeline">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=charmtv/ml-bbrv3&type=Timeline" />
- </picture>
-</a>
+MIT
