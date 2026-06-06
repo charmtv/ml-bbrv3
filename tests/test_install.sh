@@ -11,11 +11,11 @@ export ML_BBRV3_TESTING=1
 source "$ROOT_DIR/install.sh"
 
 pass() {
-  printf 'ok - %s\n' "$*"
+  printf '通过 - %s\n' "$*"
 }
 
 fail() {
-  printf 'not ok - %s\n' "$*" >&2
+  printf '失败 - %s\n' "$*" >&2
   exit 1
 }
 
@@ -25,7 +25,7 @@ assert_eq() {
   local label="$3"
 
   [[ "$expected" == "$actual" ]] \
-    || fail "$label: expected '$expected', got '$actual'"
+    || fail "$label：期望 '$expected'，实际 '$actual'"
   pass "$label"
 }
 
@@ -35,7 +35,7 @@ assert_contains() {
   local label="$3"
 
   [[ "$haystack" == *"$needle"* ]] \
-    || fail "$label: missing '$needle'"
+    || fail "$label：缺少 '$needle'"
   pass "$label"
 }
 
@@ -55,51 +55,51 @@ reset_cli_state() {
 test_help() {
   local output
   output="$(ML_BBRV3_TESTING=0 bash "$ROOT_DIR/install.sh" --help)"
-  assert_contains "$output" "Usage:" "help includes usage"
-  assert_contains "$output" "--dry-run" "help includes dry-run"
-  assert_contains "$output" "Show the interactive menu" "help documents menu default"
+  assert_contains "$output" "用法：" "帮助包含用法"
+  assert_contains "$output" "--dry-run" "帮助包含 dry-run"
+  assert_contains "$output" "显示交互菜单" "帮助说明默认进入菜单"
 }
 
 test_default_command() {
   reset_cli_state
   parse_args
   apply_default_command
-  assert_eq "menu" "$COMMAND" "no args defaults to menu"
-  assert_eq "0" "$YES" "no args keeps prompts"
+  assert_eq "menu" "$COMMAND" "无参数默认进入菜单"
+  assert_eq "0" "$YES" "无参数保留确认提示"
 
   reset_cli_state
   parse_args --dry-run
   apply_default_command
-  assert_eq "menu" "$COMMAND" "dry-run defaults to menu"
-  assert_eq "1" "$DRY_RUN" "dry-run option is preserved"
-  assert_eq "0" "$YES" "dry-run keeps prompts"
+  assert_eq "menu" "$COMMAND" "dry-run 默认进入菜单"
+  assert_eq "1" "$DRY_RUN" "保留 dry-run 选项"
+  assert_eq "0" "$YES" "dry-run 保留确认提示"
 
   reset_cli_state
   parse_args --latest --yes
   apply_default_command
-  assert_eq "latest" "$COMMAND" "latest command stays non-menu"
-  assert_eq "1" "$YES" "latest command can run non-interactively"
+  assert_eq "latest" "$COMMAND" "latest 命令不进入菜单"
+  assert_eq "1" "$YES" "latest 命令可无人值守执行"
 
   reset_cli_state
   parse_args --menu
   apply_default_command
-  assert_eq "menu" "$COMMAND" "menu command bypasses default install"
-  assert_eq "0" "$YES" "menu command keeps prompts"
+  assert_eq "menu" "$COMMAND" "menu 命令保持菜单入口"
+  assert_eq "0" "$YES" "menu 命令保留确认提示"
 }
 
 test_arch_mapping() {
-  assert_eq "x86_64" "$(normalize_arch x86_64)" "x86_64 maps to x86_64"
-  assert_eq "x86_64" "$(normalize_arch amd64)" "amd64 maps to x86_64"
-  assert_eq "arm64" "$(normalize_arch aarch64)" "aarch64 maps to arm64"
-  assert_eq "arm64" "$(normalize_arch arm64)" "arm64 maps to arm64"
+  assert_eq "x86_64" "$(normalize_arch x86_64)" "x86_64 映射到 x86_64"
+  assert_eq "x86_64" "$(normalize_arch amd64)" "amd64 映射到 x86_64"
+  assert_eq "arm64" "$(normalize_arch aarch64)" "aarch64 映射到 arm64"
+  assert_eq "arm64" "$(normalize_arch arm64)" "arm64 映射到 arm64"
 
   if normalize_arch riscv64 >/dev/null 2>&1; then
-    fail "unsupported arch should fail"
+    fail "不支持的架构应失败"
   fi
-  pass "unsupported arch fails"
+  pass "不支持的架构会失败"
 
-  assert_eq "amd64" "$(deb_arch_for x86_64)" "x86_64 deb arch"
-  assert_eq "arm64" "$(deb_arch_for arm64)" "arm64 deb arch"
+  assert_eq "amd64" "$(deb_arch_for x86_64)" "x86_64 deb 架构"
+  assert_eq "arm64" "$(deb_arch_for arm64)" "arm64 deb 架构"
 }
 
 release_fixture() {
@@ -149,7 +149,7 @@ JSON
 
 test_release_selection() {
   if ! command -v jq >/dev/null 2>&1; then
-    printf 'skip - jq not installed; release JSON tests skipped\n'
+    printf '跳过 - 未安装 jq，跳过发布 JSON 测试\n'
     return 0
   fi
 
@@ -157,21 +157,21 @@ test_release_selection() {
   fixture="$(release_fixture)"
 
   latest="$(printf '%s\n' "$fixture" | select_latest_tag x86_64)"
-  assert_eq "x86_64-7.0.5" "$latest" "latest x86_64 tag selected"
+  assert_eq "x86_64-7.0.5" "$latest" "选中最新 x86_64 标签"
 
   versions="$(printf '%s\n' "$fixture" | list_version_tags x86_64)"
-  assert_contains "$versions" "x86_64-7.0.5" "version list includes latest"
-  assert_contains "$versions" "x86_64-7.0.3" "version list includes older"
+  assert_contains "$versions" "x86_64-7.0.5" "版本列表包含最新版"
+  assert_contains "$versions" "x86_64-7.0.3" "版本列表包含旧版本"
 
   assets="$(printf '%s\n' "$fixture" | collect_deb_asset_urls x86_64-7.0.5 amd64)"
-  assert_contains "$assets" "linux-image-7.0.5-joeyblog-bbrv3_7.0.5-1_amd64.deb" "asset list includes non-debug package"
+  assert_contains "$assets" "linux-image-7.0.5-joeyblog-bbrv3_7.0.5-1_amd64.deb" "资产列表包含非调试包"
   if [[ "$assets" == *"-dbg_"* ]]; then
-    fail "asset list should exclude debug packages"
+    fail "资产列表应排除调试包"
   fi
-  pass "asset list excludes debug packages"
+  pass "资产列表已排除调试包"
 
   checksums="$(printf '%s\n' "$fixture" | collect_checksum_urls x86_64-7.0.5)"
-  assert_contains "$checksums" "SHA256SUMS" "checksum asset is discovered"
+  assert_contains "$checksums" "SHA256SUMS" "发现校验和资产"
 }
 
 test_asset_allowlist() {
@@ -181,24 +181,24 @@ test_asset_allowlist() {
     "https://github.com/byJoey/Actions-bbr-v3/releases/download/x86_64-7.0.5/linux-image-7.0.5-joeyblog-bbrv3_7.0.5-1_amd64.deb" \
     "x86_64-7.0.5" \
     "amd64" \
-    || fail "valid asset should pass allowlist"
-  pass "valid asset passes allowlist"
+    || fail "有效资产应通过白名单"
+  pass "有效资产通过白名单"
 
   if asset_is_allowed \
     "https://github.com/example/bad/releases/download/x86_64-7.0.5/linux-image-7.0.5-joeyblog-bbrv3_7.0.5-1_amd64.deb" \
     "x86_64-7.0.5" \
     "amd64"; then
-    fail "wrong repository should fail allowlist"
+    fail "错误仓库应无法通过白名单"
   fi
-  pass "wrong repository fails allowlist"
+  pass "错误仓库无法通过白名单"
 
   if asset_is_allowed \
     "https://github.com/byJoey/Actions-bbr-v3/releases/download/x86_64-7.0.5/linux-image-7.0.5-joeyblog-bbrv3-dbg_7.0.5-1_amd64.deb" \
     "x86_64-7.0.5" \
     "amd64"; then
-    fail "debug package should fail allowlist"
+    fail "调试包应无法通过白名单"
   fi
-  pass "debug package fails allowlist"
+  pass "调试包无法通过白名单"
 }
 
 test_help

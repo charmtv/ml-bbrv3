@@ -22,32 +22,32 @@ TMPDIR_CREATED=""
 
 usage() {
   cat <<'EOF'
-ml-bbrv3 installer
+ml-bbrv3 安装器
 
-Usage:
+用法：
   bash install.sh
-  bash install.sh [command] [options]
+  bash install.sh [命令] [选项]
 
-Commands:
-  no command                 Show the interactive menu.
-  --latest                  Install or update to the newest matching BBR v3 kernel.
-  --install-version TAG     Install a specific upstream release tag.
-  --list-versions           List upstream releases for the current CPU architecture.
-  --status                  Show BBR and qdisc status.
-  --enable QDISC            Enable bbr with fq, fq_pie, or cake.
-  --uninstall               Remove joeyblog BBR kernel packages.
-  --menu                    Show the interactive menu.
-  --help                    Show this help.
+命令：
+  不带命令                  显示交互菜单。
+  --latest                  安装或更新到当前架构匹配的最新版 BBR v3 内核。
+  --install-version 标签    安装指定的上游发布标签。
+  --list-versions           列出当前 CPU 架构可用的上游发布版本。
+  --status                  显示 BBR 和队列算法状态。
+  --enable 队列算法         启用 bbr，并使用 fq、fq_pie 或 cake。
+  --uninstall               移除 joeyblog BBR 内核包。
+  --menu                    显示交互菜单。
+  --help                    显示此帮助。
 
-Options:
-  --dry-run                 Print privileged or destructive commands without running them.
-  --yes                     Do not prompt before install, uninstall, or persistent sysctl write.
-  --force-non-grub          Allow install when update-grub is missing.
-  --require-checksums       Require upstream SHA256 checksum assets.
-  --repo OWNER/REPO         Override upstream release repository.
-  --sysctl-file PATH        Override persistent sysctl config path.
+选项：
+  --dry-run                 只打印需要提权或有破坏性的命令，不实际执行。
+  --yes                     安装、卸载或写入持久化 sysctl 配置前不再询问。
+  --force-non-grub          在缺少 update-grub 时仍允许安装。
+  --require-checksums       要求上游提供 SHA256 校验和资产。
+  --repo 所有者/仓库        覆盖上游发布仓库。
+  --sysctl-file 路径        覆盖持久化 sysctl 配置文件路径。
 
-Examples:
+示例：
   bash install.sh
   bash install.sh --latest --yes
   bash install.sh --latest --dry-run
@@ -61,11 +61,11 @@ log() {
 }
 
 warn() {
-  printf '[ml-bbrv3] WARNING: %s\n' "$*" >&2
+  printf '[ml-bbrv3] 警告：%s\n' "$*" >&2
 }
 
 die() {
-  printf '[ml-bbrv3] ERROR: %s\n' "$*" >&2
+  printf '[ml-bbrv3] 错误：%s\n' "$*" >&2
   exit 1
 }
 
@@ -79,7 +79,7 @@ trap cleanup EXIT
 
 run_cmd() {
   if ((DRY_RUN)); then
-    printf '[dry-run]'
+    printf '[预演]'
     printf ' %q' "$@"
     printf '\n'
     return 0
@@ -98,7 +98,7 @@ run_privileged() {
 
 require_cmd() {
   local cmd="$1"
-  command -v "$cmd" >/dev/null 2>&1 || die "Required command not found: $cmd"
+  command -v "$cmd" >/dev/null 2>&1 || die "缺少必要命令：$cmd"
 }
 
 init_privilege() {
@@ -126,7 +126,7 @@ confirm() {
 
 ensure_debian_host() {
   command -v apt-get >/dev/null 2>&1 \
-    || die "This installer supports Debian/Ubuntu hosts with apt-get only."
+    || die "此安装器只支持带 apt-get 的 Debian/Ubuntu 主机。"
 }
 
 ensure_dependencies() {
@@ -143,7 +143,7 @@ ensure_dependencies() {
     return 0
   fi
 
-  log "Installing missing dependencies: ${missing[*]}"
+  log "正在安装缺失依赖：${missing[*]}"
   run_privileged apt-get update
   run_privileged apt-get install -y "${missing[@]}"
 }
@@ -168,7 +168,7 @@ detect_arch() {
   local raw_arch
   raw_arch="$(uname -m)"
   normalize_arch "$raw_arch" \
-    || die "Unsupported CPU architecture: $raw_arch. Supported: x86_64, arm64."
+    || die "不支持的 CPU 架构：$raw_arch。支持：x86_64、arm64。"
 }
 
 deb_arch_for() {
@@ -182,7 +182,7 @@ deb_arch_for() {
       printf 'arm64\n'
       ;;
     *)
-      die "Unsupported normalized architecture: $arch"
+      die "不支持的标准化架构：$arch"
       ;;
   esac
 }
@@ -283,7 +283,7 @@ download_file() {
     --output "$output" \
     "$url"
 
-  [[ -s "$output" ]] || die "Downloaded file is empty: $output"
+  [[ -s "$output" ]] || die "下载文件为空：$output"
 }
 
 download_release_assets() {
@@ -295,7 +295,7 @@ download_release_assets() {
 
   deb_arch="$(deb_arch_for "$arch")"
   tmpdir="$(make_temp_dir)"
-  log "Using temporary download directory: $tmpdir"
+  log "使用临时下载目录：$tmpdir"
 
   checksum_urls="$(printf '%s\n' "$releases_json" | collect_checksum_urls "$tag")"
   if [[ -n "$checksum_urls" ]]; then
@@ -303,30 +303,30 @@ download_release_assets() {
     while IFS= read -r url; do
       [[ -n "$url" ]] || continue
       name="${url##*/}"
-      log "Downloading checksum file: $name"
+      log "正在下载校验和文件：$name"
       download_file "$url" "$tmpdir/$name"
     done <<<"$checksum_urls"
   elif ((REQUIRE_CHECKSUMS)); then
-    die "No upstream checksum asset found for $tag."
+    die "未找到 $tag 的上游校验和资产。"
   else
-    warn "No upstream checksum asset found for $tag; enforcing URL and architecture allowlist only."
+    warn "未找到 $tag 的上游校验和资产；仅执行 URL 和架构白名单校验。"
   fi
 
   asset_urls="$(printf '%s\n' "$releases_json" | collect_deb_asset_urls "$tag" "$deb_arch")"
-  [[ -n "$asset_urls" ]] || die "No matching .deb assets found for $tag and $deb_arch."
+  [[ -n "$asset_urls" ]] || die "未找到匹配 $tag 和 $deb_arch 的 .deb 资产。"
 
   while IFS= read -r url; do
     [[ -n "$url" ]] || continue
     asset_is_allowed "$url" "$tag" "$deb_arch" \
-      || die "Release asset failed allowlist validation: $url"
+      || die "发布资产未通过白名单校验：$url"
     name="${url##*/}"
-    log "Downloading package: $name"
+    log "正在下载软件包：$name"
     download_file "$url" "$tmpdir/$name"
   done <<<"$asset_urls"
 
   if ((checksum_found)); then
     require_cmd sha256sum
-    log "Verifying available SHA256 checksums."
+    log "正在校验可用的 SHA256 校验和。"
     (
       cd "$tmpdir"
       find . -maxdepth 1 -type f \( -name 'SHA256SUMS' -o -name '*.sha256' -o -name '*.sha256sum' -o -name '*.sha256.txt' \) -print0 \
@@ -345,21 +345,21 @@ ensure_bootloader_supported() {
   fi
 
   if ((FORCE_NON_GRUB)); then
-    warn "update-grub is missing; proceeding because --force-non-grub was provided."
+    warn "缺少 update-grub；已提供 --force-non-grub，继续执行。"
     return 0
   fi
 
-  die "update-grub was not found. This script targets GRUB systems. Re-run with --force-non-grub only if you know your bootloader handles Debian kernel packages."
+  die "未找到 update-grub。此脚本面向 GRUB 系统。只有确认你的引导程序会处理 Debian 内核包时，才使用 --force-non-grub 重新运行。"
 }
 
 update_bootloader() {
   if command -v update-grub >/dev/null 2>&1; then
-    log "Updating GRUB."
+    log "正在更新 GRUB。"
     run_privileged update-grub
     return 0
   fi
 
-  warn "Skipping bootloader update because update-grub is unavailable."
+  warn "由于 update-grub 不可用，跳过引导更新。"
   return 0
 }
 
@@ -377,20 +377,20 @@ install_packages_from_dir() {
   packages=("$package_dir"/linux-*.deb)
   shopt -u nullglob
 
-  ((${#packages[@]} > 0)) || die "No linux-*.deb packages found in $package_dir."
+  ((${#packages[@]} > 0)) || die "在 $package_dir 中未找到 linux-*.deb 软件包。"
 
-  log "Packages selected for installation:"
+  log "准备安装的软件包："
   for package in "${packages[@]}"; do
     printf '  - %s\n' "${package##*/}"
   done
 
-  confirm "Install these packages now?" || die "Installation cancelled."
+  confirm "现在安装这些软件包吗？" || die "安装已取消。"
 
   ensure_bootloader_supported
   run_privileged dpkg -i "${packages[@]}"
   update_bootloader
 
-  log "Kernel packages installed. Reboot into the new kernel when ready."
+  log "内核包已安装。准备好后请重启进入新内核。"
 }
 
 install_tag() {
@@ -403,9 +403,9 @@ install_tag() {
 
   arch="$(detect_arch)"
   [[ "$tag" == "$arch"-* ]] \
-    || die "Tag $tag does not match current architecture $arch."
+    || die "标签 $tag 与当前架构 $arch 不匹配。"
 
-  log "Fetching upstream releases from $UPSTREAM_REPO."
+  log "正在从 $UPSTREAM_REPO 获取上游发布信息。"
   releases_json="$(fetch_releases)"
   package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
   install_packages_from_dir "$package_dir"
@@ -419,12 +419,12 @@ install_latest() {
   ensure_dependencies
 
   arch="$(detect_arch)"
-  log "Fetching upstream releases from $UPSTREAM_REPO."
+  log "正在从 $UPSTREAM_REPO 获取上游发布信息。"
   releases_json="$(fetch_releases)"
   tag="$(printf '%s\n' "$releases_json" | select_latest_tag "$arch")"
-  [[ -n "$tag" ]] || die "No release tag found for architecture $arch."
+  [[ -n "$tag" ]] || die "未找到架构 $arch 对应的发布标签。"
 
-  log "Latest matching release: $tag"
+  log "匹配的最新发布版本：$tag"
   package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
   install_packages_from_dir "$package_dir"
 }
@@ -469,38 +469,38 @@ enable_bbr() {
   case "$qdisc" in
     fq | fq_pie | cake) ;;
     *)
-      die "Unsupported qdisc: $qdisc. Use fq, fq_pie, or cake."
+      die "不支持的队列算法：$qdisc。请使用 fq、fq_pie 或 cake。"
       ;;
   esac
 
   init_privilege
   require_cmd sysctl
 
-  log "Applying runtime sysctl settings: bbr + $qdisc"
+  log "正在应用运行时 sysctl 设置：bbr + $qdisc"
   run_privileged sysctl -w "net.core.default_qdisc=$qdisc"
   run_privileged sysctl -w "net.ipv4.tcp_congestion_control=bbr"
 
-  if confirm "Persist settings to $SYSCTL_CONF?"; then
+  if confirm "将设置持久化到 $SYSCTL_CONF 吗？"; then
     write_sysctl_conf "bbr" "$qdisc"
-    log "Persistent sysctl settings written to $SYSCTL_CONF."
+    log "持久化 sysctl 设置已写入 $SYSCTL_CONF。"
   else
-    warn "Runtime settings were not persisted."
+    warn "运行时设置未持久化。"
   fi
 }
 
 show_status() {
   require_cmd sysctl
 
-  printf 'Kernel: %s\n' "$(uname -r)"
-  printf 'Architecture: %s\n' "$(uname -m)"
-  printf 'Available TCP congestion controls: %s\n' "$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || printf 'unknown')"
-  printf 'Current TCP congestion control: %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || printf 'unknown')"
-  printf 'Current default qdisc: %s\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || printf 'unknown')"
+  printf '当前内核：%s\n' "$(uname -r)"
+  printf '当前架构：%s\n' "$(uname -m)"
+  printf '可用 TCP 拥塞控制算法：%s\n' "$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || printf '未知')"
+  printf '当前 TCP 拥塞控制算法：%s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || printf '未知')"
+  printf '当前默认队列算法：%s\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || printf '未知')"
 
   if command -v modinfo >/dev/null 2>&1 && modinfo tcp_bbr >/dev/null 2>&1; then
-    printf 'tcp_bbr module version: %s\n' "$(modinfo tcp_bbr | awk '/^version:/ { print $2; exit }')"
+    printf 'tcp_bbr 模块版本：%s\n' "$(modinfo tcp_bbr | awk '/^version:/ { print $2; exit }')"
   else
-    printf 'tcp_bbr module info: unavailable or built into the kernel\n'
+    printf 'tcp_bbr 模块信息：不可用，或已内置到内核中\n'
   fi
 }
 
@@ -516,35 +516,35 @@ uninstall_kernel() {
   done < <(installed_joeyblog_packages)
 
   if ((${#packages[@]} == 0)); then
-    log "No installed joeyblog kernel packages were found."
+    log "未找到已安装的 joeyblog 内核包。"
     return 0
   fi
 
-  log "Packages selected for removal:"
+  log "准备移除的软件包："
   for package in "${packages[@]}"; do
     printf '  - %s\n' "$package"
   done
 
-  confirm "Remove these packages now?" || die "Uninstall cancelled."
+  confirm "现在移除这些软件包吗？" || die "卸载已取消。"
 
   run_privileged apt-get remove --purge -y "${packages[@]}"
   update_bootloader
-  log "Kernel packages removed. Reboot when ready."
+  log "内核包已移除。准备好后请重启。"
 }
 
 show_menu() {
   cat <<'EOF'
-ml-bbrv3 menu
+ml-bbrv3 菜单
 
-  1. Install or update BBR v3 (latest)
-  2. Install a specific release tag
-  3. List release tags for this architecture
-  4. Show BBR status
-  5. Enable BBR + FQ
-  6. Enable BBR + FQ_PIE
-  7. Enable BBR + CAKE
-  8. Uninstall joeyblog BBR kernel packages
-  0. Exit
+  1. 安装或更新 BBR v3（最新版）
+  2. 安装指定发布标签
+  3. 列出当前架构可用发布标签
+  4. 查看 BBR 状态
+  5. 启用 BBR + FQ
+  6. 启用 BBR + FQ_PIE
+  7. 启用 BBR + CAKE
+  8. 卸载 joeyblog BBR 内核包
+  0. 退出
 EOF
 }
 
@@ -552,7 +552,7 @@ interactive_menu() {
   local choice tag
 
   show_menu
-  printf 'Enter choice: '
+  printf '请输入选项：'
   read -r choice
 
   case "$choice" in
@@ -560,7 +560,7 @@ interactive_menu() {
       install_latest
       ;;
     2)
-      printf 'Enter release tag: '
+      printf '请输入发布标签：'
       read -r tag
       install_tag "$tag"
       ;;
@@ -586,7 +586,7 @@ interactive_menu() {
       exit 0
       ;;
     *)
-      die "Invalid menu choice: $choice"
+      die "无效菜单选项：$choice"
       ;;
   esac
 }
@@ -596,7 +596,7 @@ set_command() {
   local arg="${2:-}"
 
   if [[ -n "$COMMAND" ]]; then
-    die "Only one command can be supplied. Already have $COMMAND, got $command."
+    die "只能提供一个命令。当前已有 $COMMAND，又收到 $command。"
   fi
 
   COMMAND="$command"
@@ -618,7 +618,7 @@ parse_args() {
         set_command latest
         ;;
       --install-version)
-        [[ $# -ge 2 && -n "$2" ]] || die "--install-version requires a tag."
+        [[ $# -ge 2 && -n "$2" ]] || die "--install-version 需要一个标签。"
         set_command install-version "$2"
         shift
         ;;
@@ -629,7 +629,7 @@ parse_args() {
         set_command status
         ;;
       --enable)
-        [[ $# -ge 2 && -n "$2" ]] || die "--enable requires fq, fq_pie, or cake."
+        [[ $# -ge 2 && -n "$2" ]] || die "--enable 需要 fq、fq_pie 或 cake。"
         set_command enable "$2"
         shift
         ;;
@@ -652,12 +652,12 @@ parse_args() {
         REQUIRE_CHECKSUMS=1
         ;;
       --repo)
-        [[ $# -ge 2 && -n "$2" ]] || die "--repo requires OWNER/REPO."
+        [[ $# -ge 2 && -n "$2" ]] || die "--repo 需要 OWNER/REPO。"
         UPSTREAM_REPO="$2"
         shift
         ;;
       --sysctl-file)
-        [[ $# -ge 2 && -n "$2" ]] || die "--sysctl-file requires a path."
+        [[ $# -ge 2 && -n "$2" ]] || die "--sysctl-file 需要一个路径。"
         SYSCTL_CONF="$2"
         shift
         ;;
@@ -677,7 +677,7 @@ parse_args() {
         set_command menu
         ;;
       *)
-        die "Unknown argument: $1"
+        die "未知参数：$1"
         ;;
     esac
     shift
@@ -719,7 +719,7 @@ main() {
       interactive_menu
       ;;
     *)
-      die "Internal error: unknown command $COMMAND"
+      die "内部错误：未知命令 $COMMAND"
       ;;
   esac
 }

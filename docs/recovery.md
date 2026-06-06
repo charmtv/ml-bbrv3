@@ -18,7 +18,7 @@
    grep -E 'GRUB_DEFAULT|GRUB_TIMEOUT' /etc/default/grub
    ```
 
-3. 先跑 dry-run：
+3. 先跑预演：
 
    ```bash
    bash install.sh --latest --dry-run
@@ -86,10 +86,10 @@ bash install.sh --enable fq --yes
 
 ## 非 GRUB 环境
 
-脚本默认阻断没有 `update-grub` 的环境。只有确认你的系统会自动处理 Debian kernel package 的引导更新时，才使用：
+脚本默认阻断没有 `update-grub` 的环境。只有确认你的系统会自动处理 Debian 内核包的引导更新时，才使用：
 
 ```bash
 bash install.sh --latest --force-non-grub
 ```
 
-在 SBC、U-Boot、定制云镜像上使用前，请先准备控制台或救援系统。
+在单板计算机（SBC）、U-Boot、定制云镜像上使用前，请先准备控制台或救援系统。

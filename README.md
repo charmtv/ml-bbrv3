@@ -1,6 +1,6 @@
 # ml-bbrv3
 
-`ml-bbrv3` 是面向 Debian/Ubuntu 服务器的 BBR v3 内核安装与管理脚本。仓库本身不构建内核制品，安装脚本会从上游仓库 `byJoey/Actions-bbr-v3` 的 GitHub Releases 获取 `.deb` 包。
+`ml-bbrv3` 是面向 Debian/Ubuntu 服务器的 BBR v3 内核安装与管理脚本。仓库本身不构建内核制品，安装脚本会从上游仓库 `byJoey/Actions-bbr-v3` 的 GitHub 发布页获取 `.deb` 包。
 
 ## 支持范围
 
@@ -74,29 +74,29 @@ bash install.sh --uninstall
 
 - 使用 `mktemp -d` 专属下载目录，不再删除或安装 `/tmp/linux-*.deb` 通配文件。
 - 下载使用 `curl -fL`、连接超时、总超时和有限重试，同时校验文件非空。
-- 上游 release asset 必须匹配 GitHub URL、release tag、架构和 `.deb` 包名白名单。
-- 默认排除 `-dbg` 调试包，避免无意安装巨大 debug image。
+- 上游发布资产必须匹配 GitHub URL、发布标签、架构和 `.deb` 包名白名单。
+- 默认排除 `-dbg` 调试包，避免无意安装巨大的调试内核镜像。
 - 默认不先卸载旧内核，安装成功后再由用户自行决定清理旧版本。
 - 默认要求 `update-grub`；非 GRUB 环境必须显式 `--force-non-grub`。
 - 支持 `--dry-run` 和 `--yes`，便于自动化和发布前预演。
-- 支持 `--require-checksums`。如果上游 release 提供 SHA256 文件，脚本会自动校验；未提供时会提示只能执行 URL/架构白名单校验。
+- 支持 `--require-checksums`。如果上游发布页提供 SHA256 文件，脚本会自动校验；未提供时会提示只能执行 URL/架构白名单校验。
 
 ## 目录结构
 
 ```text
 install.sh                         主安装器入口
-configs/arm64/linux-bbrv3.config   ARM64 kernel config
-configs/x86_64/linux-bbrv3.config  x86_64 kernel config
+configs/arm64/linux-bbrv3.config   ARM64 内核配置
+configs/x86_64/linux-bbrv3.config  x86_64 内核配置
 docs/recovery.md                   故障恢复与回滚建议
 docs/release-safety.md             发布与供应链安全说明
 scripts/generate-checksums.sh      生成本地 SHA256SUMS 的辅助脚本
 tests/test_install.sh              Bash 级脚本测试
-.github/workflows/ci.yml           CI: bash -n, shellcheck, shfmt, tests
+.github/workflows/ci.yml           持续集成：bash -n、shellcheck、shfmt、测试
 ```
 
 ## 配置说明
 
-两份 kernel config 都保留 BBR、FQ、FQ_PIE、CAKE 和常见云服务器虚拟化驱动。ARM64 配置已调整为默认 BBR，并关闭发布分发中不必要的 debug info，以减小制品体积。
+两份内核配置都保留 BBR、FQ、FQ_PIE、CAKE 和常见云服务器虚拟化驱动。ARM64 配置已调整为默认 BBR，并关闭发布分发中不必要的调试信息，以减小制品体积。
 
 ## 恢复与风险
 
@@ -110,8 +110,8 @@ Telegram 群：https://t.me/mlvps66
 
 ## 致谢
 
-感谢 `Naochen2799/Latest-Kernel-BBR3` 和 `byJoey/Actions-bbr-v3` 项目提供的技术参考与 release 制品来源。
+感谢 `Naochen2799/Latest-Kernel-BBR3` 和 `byJoey/Actions-bbr-v3` 项目提供的技术参考与发布制品来源。
 
-## License
+## 许可证
 
 MIT
