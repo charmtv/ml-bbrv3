@@ -96,6 +96,10 @@ tests/test_install.sh              Bash 级脚本测试
 
 如果下载校验、GRUB 更新、`dpkg -i` 或重启后启动失败，请先不要继续重复执行安装，按恢复手册保留现场并回滚。
 
+## 交流与反馈
+
+Telegram 群：https://t.me/mlvps66
+
 ## 致谢
 
 感谢 `Naochen2799/Latest-Kernel-BBR3` 和 `byJoey/Actions-bbr-v3` 项目提供的技术参考与 release 制品来源。
