@@ -29,6 +29,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/instal
 bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest --yes
 ```
 
+`--latest` 默认选择版本号最高的标准构建，不会自动选择 `-max` 变体。需要 `-max` 时，请先列出版本，再通过 `--install-version` 显式指定对应标签。
+
 预演一键安装，不执行系统写入：
 
 ```bash

@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SCRIPT_VERSION="2.0.0"
+readonly SCRIPT_VERSION="2.0.1"
 readonly DEFAULT_UPSTREAM_REPO="byJoey/Actions-bbr-v3"
 
 UPSTREAM_REPO="${ML_BBRV3_UPSTREAM_REPO:-$DEFAULT_UPSTREAM_REPO}"
@@ -73,6 +73,7 @@ cleanup() {
   if [[ -n "$TMPDIR_CREATED" && -d "$TMPDIR_CREATED" ]]; then
     rm -rf "$TMPDIR_CREATED"
   fi
+  TMPDIR_CREATED=""
 }
 
 trap cleanup EXIT
@@ -129,23 +130,61 @@ ensure_debian_host() {
     || die "此安装器只支持带 apt-get 的 Debian/Ubuntu 主机。"
 }
 
+dependency_package_for() {
+  local cmd="$1"
+
+  case "$cmd" in
+    awk)
+      printf 'mawk\n'
+      ;;
+    sysctl)
+      printf 'procps\n'
+      ;;
+    curl | dpkg | jq | sed)
+      printf '%s\n' "$cmd"
+      ;;
+    *)
+      die "内部错误：未配置命令 $cmd 对应的 Debian 软件包。"
+      ;;
+  esac
+}
+
 ensure_dependencies() {
-  local missing=()
+  local missing_commands=()
+  local missing_packages=()
   local cmd
 
   for cmd in curl jq dpkg awk sed sysctl; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-      missing+=("$cmd")
+      missing_commands+=("$cmd")
+      missing_packages+=("$(dependency_package_for "$cmd")")
     fi
   done
 
-  if ((${#missing[@]} == 0)); then
+  if ((${#missing_commands[@]} == 0)); then
     return 0
   fi
 
-  log "正在安装缺失依赖：${missing[*]}"
+  log "正在安装缺失命令：${missing_commands[*]}"
   run_privileged apt-get update
-  run_privileged apt-get install -y "${missing[@]}"
+  run_privileged apt-get install -y "${missing_packages[@]}"
+}
+
+validate_config() {
+  [[ "$UPSTREAM_REPO" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$ ]] \
+    || die "无效的 GitHub 仓库：$UPSTREAM_REPO。格式应为 OWNER/REPO。"
+  [[ "$CONNECT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] \
+    || die "ML_BBRV3_CONNECT_TIMEOUT 必须是正整数。"
+  [[ "$MAX_TIME" =~ ^[1-9][0-9]*$ ]] \
+    || die "ML_BBRV3_MAX_TIME 必须是正整数。"
+}
+
+validate_release_tag() {
+  local tag="$1"
+  local arch="$2"
+
+  [[ "$tag" =~ ^${arch}-[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] \
+    || die "无效或架构不匹配的发布标签：$tag。"
 }
 
 normalize_arch() {
@@ -188,7 +227,7 @@ deb_arch_for() {
 }
 
 github_releases_api() {
-  printf 'https://api.github.com/repos/%s/releases\n' "$UPSTREAM_REPO"
+  printf 'https://api.github.com/repos/%s/releases?per_page=100\n' "$UPSTREAM_REPO"
 }
 
 fetch_releases() {
@@ -207,8 +246,16 @@ select_latest_tag() {
   local arch="$1"
 
   jq -r --arg arch "$arch" '
-    [.[] | select(.tag_name | test("^" + $arch + "-"; "i"))]
-    | sort_by(.published_at)
+    [.[]
+      | select(.draft != true and .prerelease != true)
+      | select(.tag_name | test("^" + $arch + "-[0-9]+(\\.[0-9]+)+$"))
+      | . + {
+          version_parts: (.tag_name
+            | sub("^" + $arch + "-"; "")
+            | split(".")
+            | map(tonumber))
+        }]
+    | sort_by(.version_parts)
     | last
     | .tag_name // empty
   '
@@ -218,7 +265,9 @@ list_version_tags() {
   local arch="$1"
 
   jq -r --arg arch "$arch" '
-    [.[] | select(.tag_name | test("^" + $arch + "-"; "i"))]
+    [.[]
+      | select(.draft != true and .prerelease != true)
+      | select(.tag_name | test("^" + $arch + "-"; "i"))]
     | sort_by(.published_at)
     | reverse
     | .[].tag_name
@@ -259,16 +308,24 @@ asset_is_allowed() {
   local prefix="https://github.com/${UPSTREAM_REPO}/releases/download/${tag}/"
   local name="${url##*/}"
 
-  [[ "$url" == "$prefix"* ]] || return 1
-  [[ "$name" == linux-* ]] || return 1
-  [[ "$name" == *.deb ]] || return 1
-  [[ "$name" == *"_${deb_arch}.deb" ]] || return 1
+  [[ "$url" == "$prefix$name" ]] || return 1
+  [[ "$name" =~ ^linux-[A-Za-z0-9.+~_-]+_${deb_arch}\.deb$ ]] || return 1
   [[ "$name" != *"-dbg_"* ]] || return 1
+}
+
+checksum_asset_is_allowed() {
+  local url="$1"
+  local tag="$2"
+  local prefix="https://github.com/${UPSTREAM_REPO}/releases/download/${tag}/"
+  local name="${url##*/}"
+
+  [[ "$url" == "$prefix$name" ]] || return 1
+  [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || return 1
+  [[ "$name" == "SHA256SUMS" || "$name" =~ \.(sha256|sha256sum|sha256\.txt)$ ]] || return 1
 }
 
 make_temp_dir() {
   TMPDIR_CREATED="$(mktemp -d "${TMPDIR:-/tmp}/ml-bbrv3.XXXXXX")"
-  printf '%s\n' "$TMPDIR_CREATED"
 }
 
 download_file() {
@@ -286,6 +343,56 @@ download_file() {
   [[ -s "$output" ]] || die "下载文件为空：$output"
 }
 
+verify_package_checksums() {
+  local package_dir="$1"
+  local manifest="$package_dir/.ml-bbrv3-verified-checksums"
+  local checksum_files=()
+  local packages=()
+  local checksum_file package name line
+
+  shopt -s nullglob
+  checksum_files=(
+    "$package_dir"/SHA256SUMS
+    "$package_dir"/*.sha256
+    "$package_dir"/*.sha256sum
+    "$package_dir"/*.sha256.txt
+  )
+  packages=("$package_dir"/linux-*.deb)
+  shopt -u nullglob
+
+  ((${#checksum_files[@]} > 0)) || die "下载目录中没有可用的 SHA256 校验和文件。"
+  ((${#packages[@]} > 0)) || die "下载目录中没有待校验的软件包。"
+  : >"$manifest"
+
+  for package in "${packages[@]}"; do
+    name="${package##*/}"
+    line=""
+
+    for checksum_file in "${checksum_files[@]}"; do
+      line="$(awk -v name="$name" '
+        length($1) == 64 && $1 ~ /^[[:xdigit:]]+$/ {
+          file = $2
+          sub(/^\*/, "", file)
+          sub(/^\.\//, "", file)
+          if (file == name) {
+            print $1 "  " name
+            exit
+          }
+        }
+      ' "$checksum_file")"
+      [[ -n "$line" ]] && break
+    done
+
+    [[ -n "$line" ]] || die "软件包 $name 没有对应的 SHA256 校验项。"
+    printf '%s\n' "$line" >>"$manifest"
+  done
+
+  (
+    cd "$package_dir"
+    sha256sum -c "${manifest##*/}" --strict
+  )
+}
+
 download_release_assets() {
   local tag="$1"
   local arch="$2"
@@ -294,7 +401,8 @@ download_release_assets() {
   local checksum_found=0
 
   deb_arch="$(deb_arch_for "$arch")"
-  tmpdir="$(make_temp_dir)"
+  make_temp_dir
+  tmpdir="$TMPDIR_CREATED"
   log "使用临时下载目录：$tmpdir"
 
   checksum_urls="$(printf '%s\n' "$releases_json" | collect_checksum_urls "$tag")"
@@ -302,6 +410,8 @@ download_release_assets() {
     checksum_found=1
     while IFS= read -r url; do
       [[ -n "$url" ]] || continue
+      checksum_asset_is_allowed "$url" "$tag" \
+        || die "校验和资产未通过白名单校验：$url"
       name="${url##*/}"
       log "正在下载校验和文件：$name"
       download_file "$url" "$tmpdir/$name"
@@ -326,17 +436,9 @@ download_release_assets() {
 
   if ((checksum_found)); then
     require_cmd sha256sum
-    log "正在校验可用的 SHA256 校验和。"
-    (
-      cd "$tmpdir"
-      find . -maxdepth 1 -type f \( -name 'SHA256SUMS' -o -name '*.sha256' -o -name '*.sha256sum' -o -name '*.sha256.txt' \) -print0 \
-        | while IFS= read -r -d '' checksum_file; do
-          sha256sum -c "${checksum_file#./}" --ignore-missing
-        done
-    )
+    log "正在逐个校验已下载软件包的 SHA256。"
+    verify_package_checksums "$tmpdir"
   fi
-
-  printf '%s\n' "$tmpdir"
 }
 
 ensure_bootloader_supported() {
@@ -402,12 +504,12 @@ install_tag() {
   ensure_dependencies
 
   arch="$(detect_arch)"
-  [[ "$tag" == "$arch"-* ]] \
-    || die "标签 $tag 与当前架构 $arch 不匹配。"
+  validate_release_tag "$tag" "$arch"
 
   log "正在从 $UPSTREAM_REPO 获取上游发布信息。"
   releases_json="$(fetch_releases)"
-  package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
+  download_release_assets "$tag" "$arch" "$releases_json"
+  package_dir="$TMPDIR_CREATED"
   install_packages_from_dir "$package_dir"
 }
 
@@ -423,9 +525,11 @@ install_latest() {
   releases_json="$(fetch_releases)"
   tag="$(printf '%s\n' "$releases_json" | select_latest_tag "$arch")"
   [[ -n "$tag" ]] || die "未找到架构 $arch 对应的发布标签。"
+  validate_release_tag "$tag" "$arch"
 
   log "匹配的最新发布版本：$tag"
-  package_dir="$(download_release_assets "$tag" "$arch" "$releases_json")"
+  download_release_assets "$tag" "$arch" "$releases_json"
+  package_dir="$TMPDIR_CREATED"
   install_packages_from_dir "$package_dir"
 }
 
@@ -694,6 +798,7 @@ apply_default_command() {
 
 main() {
   parse_args "$@"
+  validate_config
   apply_default_command
 
   case "$COMMAND" in
