@@ -38,7 +38,7 @@ bash scripts/generate-checksums.sh /path/to/release-assets
 - `shfmt -d -i 2 -ci -bn`
 - `tests/test_install.sh`
 
-GitHub Actions 使用只读 `contents` 权限，并将 `actions/checkout` 固定到 `v4` 当前解析的提交 SHA，降低动作浮动标签风险。
+GitHub Actions 使用只读 `contents` 权限，并将 `actions/checkout` 固定到 `v6` 当前解析的提交 SHA，降低动作浮动标签风险。
 
 ## 发布前检查
 
