@@ -63,6 +63,5 @@ bash install.sh --latest --dry-run
 
 ## 其他
 
-- Telegram：https://t.me/mlvps66
 - 许可：MIT
 - 致谢：`Naochen2799/Latest-Kernel-BBR3`、`byJoey/Actions-bbr-v3`
