@@ -70,7 +70,7 @@ test_help() {
   assert_contains "$output" "显示交互菜单" "帮助说明默认进入菜单"
 
   output="$(ML_BBRV3_TESTING=0 bash "$ROOT_DIR/install.sh" --version)"
-  assert_eq "2.0.1" "$output" "输出当前脚本版本"
+  assert_eq "2.0.2" "$output" "输出当前脚本版本"
 }
 
 test_default_command() {

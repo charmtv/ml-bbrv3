@@ -1,4 +1,4 @@
-# ml-bbrv3
+# BBR v3 内核管理器
 
 用于 Debian/Ubuntu 服务器的 BBR v3 内核安装与管理脚本。内核 `.deb` 包来自上游仓库 `byJoey/Actions-bbr-v3`。
 
@@ -17,13 +17,13 @@
 打开交互菜单：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/bbr-v3/main/install.sh)
 ```
 
 无人值守安装最新版：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/ml-bbrv3/main/install.sh) --latest --yes
+bash <(curl -fsSL https://raw.githubusercontent.com/charmtv/bbr-v3/main/install.sh) --latest --yes
 ```
 
 安装前预演：
@@ -33,6 +33,8 @@ bash install.sh --latest --dry-run
 ```
 
 `--latest` 选择版本号最高的标准构建，不会自动选择 `-max`。如需 `-max`，请通过 `--install-version` 显式指定标签。
+
+脚本对 GitHub API 和发布资产会自动重试。如果遇到 GitHub 匿名 API 限流，可在运行前设置只读 `GITHUB_TOKEN`；脚本不会输出该值。新环境变量前缀为 `BBR_V3_`，同时兼容原有 `ML_BBRV3_` 配置。
 
 ## 常用命令
 

@@ -3,13 +3,13 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SCRIPT_VERSION="2.0.1"
+readonly SCRIPT_VERSION="2.0.2"
 readonly DEFAULT_UPSTREAM_REPO="byJoey/Actions-bbr-v3"
 
-UPSTREAM_REPO="${ML_BBRV3_UPSTREAM_REPO:-$DEFAULT_UPSTREAM_REPO}"
-SYSCTL_CONF="${ML_BBRV3_SYSCTL_CONF:-/etc/sysctl.d/99-ml-bbrv3.conf}"
-CONNECT_TIMEOUT="${ML_BBRV3_CONNECT_TIMEOUT:-10}"
-MAX_TIME="${ML_BBRV3_MAX_TIME:-60}"
+UPSTREAM_REPO="${BBR_V3_UPSTREAM_REPO:-${ML_BBRV3_UPSTREAM_REPO:-$DEFAULT_UPSTREAM_REPO}}"
+SYSCTL_CONF="${BBR_V3_SYSCTL_CONF:-${ML_BBRV3_SYSCTL_CONF:-/etc/sysctl.d/99-ml-bbrv3.conf}}"
+CONNECT_TIMEOUT="${BBR_V3_CONNECT_TIMEOUT:-${ML_BBRV3_CONNECT_TIMEOUT:-10}}"
+MAX_TIME="${BBR_V3_MAX_TIME:-${ML_BBRV3_MAX_TIME:-60}}"
 
 DRY_RUN=0
 YES=0
@@ -22,7 +22,7 @@ TMPDIR_CREATED=""
 
 usage() {
   cat <<'EOF'
-ml-bbrv3 安装器
+BBR v3 内核安装器
 
 用法：
   bash install.sh
@@ -57,15 +57,15 @@ EOF
 }
 
 log() {
-  printf '[ml-bbrv3] %s\n' "$*" >&2
+  printf '[bbr-v3] %s\n' "$*" >&2
 }
 
 warn() {
-  printf '[ml-bbrv3] 警告：%s\n' "$*" >&2
+  printf '[bbr-v3] 警告：%s\n' "$*" >&2
 }
 
 die() {
-  printf '[ml-bbrv3] 错误：%s\n' "$*" >&2
+  printf '[bbr-v3] 错误：%s\n' "$*" >&2
   exit 1
 }
 
@@ -232,13 +232,20 @@ github_releases_api() {
 
 fetch_releases() {
   local api_url
+  local api_headers=(-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
   api_url="$(github_releases_api)"
+
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    api_headers+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  fi
 
   curl -fsSL \
     --connect-timeout "$CONNECT_TIMEOUT" \
     --max-time "$MAX_TIME" \
-    --retry 2 \
-    --retry-delay 1 \
+    --retry 4 \
+    --retry-delay 2 \
+    --retry-connrefused \
+    "${api_headers[@]}" \
     "$api_url"
 }
 
@@ -325,7 +332,7 @@ checksum_asset_is_allowed() {
 }
 
 make_temp_dir() {
-  TMPDIR_CREATED="$(mktemp -d "${TMPDIR:-/tmp}/ml-bbrv3.XXXXXX")"
+  TMPDIR_CREATED="$(mktemp -d "${TMPDIR:-/tmp}/bbr-v3.XXXXXX")"
 }
 
 download_file() {
@@ -335,8 +342,9 @@ download_file() {
   curl -fL \
     --connect-timeout "$CONNECT_TIMEOUT" \
     --max-time "$MAX_TIME" \
-    --retry 2 \
-    --retry-delay 1 \
+    --retry 4 \
+    --retry-delay 2 \
+    --retry-connrefused \
     --output "$output" \
     "$url"
 
@@ -345,7 +353,7 @@ download_file() {
 
 verify_package_checksums() {
   local package_dir="$1"
-  local manifest="$package_dir/.ml-bbrv3-verified-checksums"
+  local manifest="$package_dir/.bbr-v3-verified-checksums"
   local checksum_files=()
   local packages=()
   local checksum_file package name line
@@ -549,7 +557,7 @@ write_sysctl_conf() {
   local qdisc="$2"
   local tmpfile
 
-  tmpfile="$(mktemp "${TMPDIR:-/tmp}/ml-bbrv3-sysctl.XXXXXX")"
+  tmpfile="$(mktemp "${TMPDIR:-/tmp}/bbr-v3-sysctl.XXXXXX")"
   if [[ -r "$SYSCTL_CONF" ]]; then
     sed \
       -e '/^net\.core\.default_qdisc=/d' \
@@ -638,7 +646,7 @@ uninstall_kernel() {
 
 show_menu() {
   cat <<'EOF'
-ml-bbrv3 菜单
+BBR v3 内核管理菜单
 
   1. 安装或更新 BBR v3（最新版）
   2. 安装指定发布标签
